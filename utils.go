@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"os"
 	"os/exec"
 	"reflect"
@@ -60,7 +59,7 @@ func listDetails(p protoInfo, field string) {
 	fmt.Println()
 }
 
-func executeCmd(command string, conn net.Conn) {
+func executeCmd(command string, conn *noise.Conn) {
 	var cmd *exec.Cmd
 
 	cmdParse := strings.Split(command, " ")
@@ -88,7 +87,7 @@ func handleIO(conn *noise.Conn) {
 		}()
 
 		if n, err = io.Copy(writer, reader); err != nil {
-			verb("ERROR: %s\n", err)
+			fatalf("%s", err)
 		}
 		c <- n
 	}
