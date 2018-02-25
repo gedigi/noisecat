@@ -1,7 +1,7 @@
-# noisecat
+# noisecat :smirk_cat:
 The noise pipes swiss army knife
 
-Noisecat :smirk_cat: is a featured networking utility which reads and writes data across network connections, using the [Noise Protocol Framework](http://noiseprotocol.org) (and TCP/IP).
+noisecat :smirk_cat: is a featured networking utility which reads and writes data across network connections, using the [Noise Protocol Framework](http://noiseprotocol.org) (and TCP/IP).
 
 ## Usage
 This is how `noisecat -h` looks like:
@@ -66,3 +66,4 @@ Other features are:
 ## TODO
 - [ ] write some tests
 - [ ] add new features (suggestions are welcome, pull requests too!)
+- [ ] ...???
