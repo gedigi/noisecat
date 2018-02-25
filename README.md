@@ -51,7 +51,7 @@ This is how `noisecat -h` looks like:
       SHA256, SHA512, BLAKE2b, BLAKE2s
 
 The flags are similar to the traditional netcat. In short:
-* -l -p 31337: listens on port 31337/tcp
+* -l -p 31337 listens on port 31337/tcp
 * -e executes a command (reverse shell anyone?)
 
 The main difference is the Noise Protocol-related flags:
