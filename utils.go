@@ -25,7 +25,7 @@ func showBanner() {
 
 func listSupportedProtocols() {
 	fmt.Print("\nProtocol name format: Noise_PT_DH_CP_HS\n\n")
-	fmt.Print("Where:\n  PT: pattern\n  DH: Diffie-Helman handshake function\n")
+	fmt.Print("Where:\n  PT: Handshake pattern\n  DH: Diffie-Helman handshake function\n")
 	fmt.Print("  CP: Cipher function\n  HS: Hash function\n\n")
 	fmt.Print("  e.g. Noise_NN_25519_AESGCM_SHA256\n\n")
 
