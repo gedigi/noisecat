@@ -44,7 +44,7 @@ func init() {
 	flag.BoolVar(&config.verbose, "v", false, "more verbose output")
 	flag.BoolVar(&config.daemon, "k", false, "accepts multiple connections (-l && (-e || -proxy) required)")
 	flag.StringVar(&config.srcPort, "p", "0", "source `port` to use")
-	flag.StringVar(&config.srcHost, "s", "", "source `IP address` to use")
+	flag.StringVar(&config.srcHost, "s", "", "source `address` to use")
 	flag.StringVar(&config.protocol, "proto", "Noise_NN_25519_AESGCM_SHA256", "`protocol name` to use")
 	flag.StringVar(&config.psk, "psk", "", "`pre-shared key` to use (max 32 bytes)")
 	flag.StringVar(&config.rStatic, "rstatic", "", "`static key` of the remote peer (32 bytes, hex-encoded)")
