@@ -67,4 +67,5 @@ Other features are:
 - [ ] write some tests
 - [ ] add a static key validator helper function
 - [ ] add new features (suggestions are welcome, pull requests too!)
+- [ ] add some helper scripts (Makefile?)
 - [ ] ...???
