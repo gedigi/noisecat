@@ -51,19 +51,20 @@ This is how `noisecat -h` looks like:
       SHA256, SHA512, BLAKE2b, BLAKE2s
 
 The flags are similar to the traditional netcat. In short:
-* -l -p 31337 listens on port 31337/tcp
-* -e executes a command (reverse shell anyone?)
+* `-l -p 31337` listens on port 31337/tcp
+* `-e /bin/sh` executes /bin/sh (reverse shell anyone?)
 
 The main difference is the Noise Protocol-related flags:
-* -proto sets the Noise Protocol name that you want to use
-* -psk sets a pre-shared key, known to both client and server, used to authenticate a handshake
-* -rstatic specifies the remote peer static (public) key, used in "K"-type handshakes
+* `-proto` sets the Noise Protocol name that you want to use
+* `-psk` sets a pre-shared key, known to both client and server, used to authenticate a handshake
+* `-rstatic` specifies the remote peer static (public) key, used in "K"-type handshakes
 
 Other features are:
-* -proxy allows to create a tunnel `client -noise-> server -tcp-> final endpoint`
-* -k accepts multiple connections (like ncat)
+* `-proxy` allows to create a tunnel `client -noise-> server -tcp-> final endpoint`
+* `-k` accepts multiple connections (like ncat)
 
 ## TODO
 - [ ] write some tests
+- [ ] add a static key validator helper function
 - [ ] add new features (suggestions are welcome, pull requests too!)
 - [ ] ...???
