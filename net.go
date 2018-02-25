@@ -93,10 +93,10 @@ func executeCmd(command string, conn net.Conn) {
 	}
 }
 
-func handleIO(conn *noise.Conn) {
+func handleIO(conn net.Conn) {
 	c := make(chan progress)
 
-	copy := func(writer io.WriteCloser, reader io.ReadCloser, dir string) {
+	copyIO := func(writer io.WriteCloser, reader io.ReadCloser, dir string) {
 		defer func() {
 			reader.Close()
 			writer.Close()
@@ -105,11 +105,12 @@ func handleIO(conn *noise.Conn) {
 		if err != nil {
 			fatalf("%s", err)
 		}
+
 		c <- progress{bytes: n, dir: dir}
 	}
 
-	go copy(os.Stdout, conn, "RCV")
-	go copy(conn, os.Stdin, "SNT")
+	go copyIO(os.Stdout, conn, "RCV")
+	go copyIO(conn, os.Stdin, "SNT")
 
 	select {
 	case s := <-c:
