@@ -42,7 +42,7 @@ func init() {
 	flag.StringVar(&config.proxy, "proxy", "", "`address:port` combination to forward connections to (-l required)")
 	flag.BoolVar(&config.listen, "l", false, "listens for incoming connections")
 	flag.BoolVar(&config.verbose, "v", false, "more verbose output")
-	flag.BoolVar(&config.daemon, "k", false, "accepts multiple connections (-l, -e or -proxy required)")
+	flag.BoolVar(&config.daemon, "k", false, "accepts multiple connections (-l && (-e || -proxy) required)")
 	flag.StringVar(&config.srcPort, "p", "0", "source `port` to use")
 	flag.StringVar(&config.srcHost, "s", "", "source `IP address` to use")
 	flag.StringVar(&config.protocol, "proto", "Noise_NN_25519_AESGCM_SHA256", "`protocol name` to use")
@@ -69,7 +69,7 @@ func main() {
 
 	if config.rStatic != "" {
 		if len(config.rStatic) != 64 {
-			fatalf("Remote static needs to be 32 bytes")
+			fatalf("Remote static key needs to be 32 bytes")
 		} else {
 			rStatic, err := hex.DecodeString(config.rStatic)
 			if err != nil {
@@ -77,11 +77,18 @@ func main() {
 			}
 			config.rStatic = string(rStatic)
 		}
-
 	}
 
-	if config.daemon && (!config.listen && (config.proxy != "" || config.executeCmd != "")) {
-		fatalf("-k requires -l and either -proxy or -e")
+	if config.daemon {
+		if !config.listen {
+			fatalf("-k requires -l")
+		}
+		if config.proxy == "" && config.executeCmd == "" {
+			fatalf("-k requires -proxy or -e")
+		}
+	}
+	if config.proxy != "" && !config.listen {
+		fatalf("Client mode doesn't support -proxy")
 	}
 	prepareNoiseConfig()
 
