@@ -30,7 +30,7 @@ This is how `noisecat -h` looks like:
     Protocol name format: Noise_PT_DH_CP_HS
 
     Where:
-      PT: pattern
+      PT: Handshake pattern
       DH: Diffie-Helman handshake function
       CP: Cipher function
       HS: Hash function
