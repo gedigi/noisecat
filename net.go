@@ -24,7 +24,7 @@ func startClient() {
 		verb("Local static key: %x", noiseconfig.StaticKeypair.Public)
 	}
 	if config.executeCmd != "" {
-		executeCmd(config.executeCmd, conn)
+		executeCmd(conn, config.executeCmd)
 	}
 	handleIO(conn)
 }
@@ -51,9 +51,9 @@ func startServer() {
 			remoteAddr := conn.RemoteAddr().String()
 			verb("Connection from %s", remoteAddr)
 			if config.executeCmd != "" {
-				go executeCmd(config.executeCmd, conn)
+				go executeCmd(conn, config.executeCmd)
 			} else if config.proxy != "" {
-				go proxyConn(config.proxy, conn)
+				go proxyConn(conn, config.proxy)
 			}
 		}
 	} else {
@@ -64,9 +64,9 @@ func startServer() {
 
 		verb("Connection from %s", conn.RemoteAddr().String())
 		if config.executeCmd != "" {
-			executeCmd(config.executeCmd, conn)
+			executeCmd(conn, config.executeCmd)
 		} else if config.proxy != "" {
-			proxyConn(config.proxy, conn)
+			proxyConn(conn, config.proxy)
 		} else {
 			handleIO(conn)
 		}
@@ -74,7 +74,7 @@ func startServer() {
 }
 
 // -- Network helper functions
-func executeCmd(command string, conn net.Conn) {
+func executeCmd(conn net.Conn, command string) {
 	defer func() {
 		conn.Close()
 	}()
@@ -96,72 +96,42 @@ func executeCmd(command string, conn net.Conn) {
 func handleIO(conn net.Conn) {
 	c := make(chan progress)
 
-	copyIO := func(writer io.WriteCloser, reader io.ReadCloser, dir string) {
-		defer func() {
-			reader.Close()
-			writer.Close()
-		}()
-		n, err := io.Copy(writer, reader)
-		if err != nil {
-			fatalf("%s", err)
+	go copyIO(conn, os.Stdout, "SNT", &c)
+	go copyIO(os.Stdin, conn, "RCV", &c)
+
+	for i := 0; i < 2; i++ {
+		select {
+		case s := <-c:
+			verb("%s: %d", s.dir, s.bytes)
 		}
-
-		c <- progress{bytes: n, dir: dir}
-	}
-
-	go copyIO(os.Stdout, conn, "RCV")
-	go copyIO(conn, os.Stdin, "SNT")
-
-	select {
-	case s := <-c:
-		verb("%s: %d", s.dir, s.bytes)
 	}
 }
 
-func proxyConn(address string, conn net.Conn) {
+func copyIO(writer io.WriteCloser, reader io.ReadCloser, dir string, c *chan progress) {
+	defer func() {
+		reader.Close()
+		writer.Close()
+	}()
+	n, _ := io.Copy(writer, reader)
+
+	*c <- progress{bytes: n, dir: dir}
+}
+
+func proxyConn(conn net.Conn, address string) {
+	c := make(chan progress)
+
 	pConn, err := net.Dial("tcp", address)
 	if err != nil {
 		fatalf("Can't connect to remote host: %s", err)
 	}
-	defer func() {
-		conn.Close()
-		pConn.Close()
-	}()
-	c1 := makeChan(conn)
-	c2 := makeChan(pConn)
-	for {
+
+	go copyIO(conn, pConn, "SNT", &c)
+	go copyIO(pConn, conn, "RCV", &c)
+
+	for i := 0; i < 2; i++ {
 		select {
-		case b1 := <-c1:
-			if b1 != nil {
-				pConn.Write(b1)
-			} else {
-				return
-			}
-		case b2 := <-c2:
-			if b2 != nil {
-				conn.Write(b2)
-			} else {
-				return
-			}
+		case s := <-c:
+			verb("%s: %d", s.dir, s.bytes)
 		}
 	}
-}
-
-func makeChan(conn io.ReadCloser) chan []byte {
-	c := make(chan []byte)
-	go func() {
-		b := make([]byte, 1024)
-		for {
-			n, err := conn.Read(b)
-			if err != nil {
-				c <- nil
-			}
-			if n > 0 {
-				res := make([]byte, n)
-				copy(res, b[:n])
-				c <- res
-			}
-		}
-	}()
-	return c
 }
