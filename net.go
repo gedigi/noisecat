@@ -24,9 +24,9 @@ func startClient() {
 		verb("Local static key: %x", noiseconfig.StaticKeypair.Public)
 	}
 	if config.executeCmd != "" {
-		executeCmd(conn, config.executeCmd)
+		executeCmd(conn)
 	} else {
-		handleIO(conn, "")
+		handleIO(conn)
 	}
 }
 
@@ -52,9 +52,9 @@ func startServer() {
 			remoteAddr := conn.RemoteAddr().String()
 			verb("Connection from %s", remoteAddr)
 			if config.executeCmd != "" {
-				go executeCmd(conn, config.executeCmd)
+				go executeCmd(conn)
 			} else {
-				go handleIO(conn, config.proxy)
+				go handleIO(conn)
 			}
 		}
 	} else {
@@ -65,19 +65,19 @@ func startServer() {
 
 		verb("Connection from %s", conn.RemoteAddr().String())
 		if config.executeCmd != "" {
-			executeCmd(conn, config.executeCmd)
+			executeCmd(conn)
 		} else {
-			handleIO(conn, config.proxy)
+			handleIO(conn)
 		}
 	}
 }
 
 // -- Network helper functions
-func executeCmd(conn net.Conn, command string) {
+func executeCmd(conn net.Conn) {
 	defer func() {
 		conn.Close()
 	}()
-	cmdParse := strings.Split(command, " ")
+	cmdParse := strings.Split(config.executeCmd, " ")
 	cmdName := cmdParse[0]
 	var cmdArgs []string
 	if len(cmdParse[1:]) > 0 {
@@ -92,13 +92,13 @@ func executeCmd(conn net.Conn, command string) {
 	}
 }
 
-func handleIO(conn net.Conn, proxyAddress string) {
+func handleIO(conn net.Conn) {
 	c := make(chan progress)
 	var w io.WriteCloser
 	var r io.ReadCloser
 
-	if proxyAddress != "" {
-		pConn, err := net.Dial("tcp", proxyAddress)
+	if config.proxy != "" {
+		pConn, err := net.Dial("tcp", config.proxy)
 		if err != nil {
 			fatalf("Can't connect to remote host: %s", err)
 		}
