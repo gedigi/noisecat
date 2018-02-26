@@ -25,8 +25,9 @@ func startClient() {
 	}
 	if config.executeCmd != "" {
 		executeCmd(conn, config.executeCmd)
+	} else {
+		handleIO(conn, "")
 	}
-	handleIO(conn)
 }
 
 func startServer() {
@@ -52,8 +53,8 @@ func startServer() {
 			verb("Connection from %s", remoteAddr)
 			if config.executeCmd != "" {
 				go executeCmd(conn, config.executeCmd)
-			} else if config.proxy != "" {
-				go proxyConn(conn, config.proxy)
+			} else {
+				go handleIO(conn, config.proxy)
 			}
 		}
 	} else {
@@ -65,10 +66,8 @@ func startServer() {
 		verb("Connection from %s", conn.RemoteAddr().String())
 		if config.executeCmd != "" {
 			executeCmd(conn, config.executeCmd)
-		} else if config.proxy != "" {
-			proxyConn(conn, config.proxy)
 		} else {
-			handleIO(conn)
+			handleIO(conn, config.proxy)
 		}
 	}
 }
@@ -93,11 +92,23 @@ func executeCmd(conn net.Conn, command string) {
 	}
 }
 
-func handleIO(conn net.Conn) {
+func handleIO(conn net.Conn, proxyAddress string) {
 	c := make(chan progress)
+	var w io.WriteCloser
+	var r io.ReadCloser
 
-	go copyIO(conn, os.Stdout, "SNT", &c)
-	go copyIO(os.Stdin, conn, "RCV", &c)
+	if proxyAddress != "" {
+		pConn, err := net.Dial("tcp", proxyAddress)
+		if err != nil {
+			fatalf("Can't connect to remote host: %s", err)
+		}
+		w, r = pConn, pConn
+	} else {
+		r = os.Stdin
+		w = os.Stdout
+	}
+	go copyIO(conn, r, "SNT", &c)
+	go copyIO(w, conn, "RCV", &c)
 
 	for i := 0; i < 2; i++ {
 		select {
@@ -115,23 +126,4 @@ func copyIO(writer io.WriteCloser, reader io.ReadCloser, dir string, c *chan pro
 	n, _ := io.Copy(writer, reader)
 
 	*c <- progress{bytes: n, dir: dir}
-}
-
-func proxyConn(conn net.Conn, address string) {
-	c := make(chan progress)
-
-	pConn, err := net.Dial("tcp", address)
-	if err != nil {
-		fatalf("Can't connect to remote host: %s", err)
-	}
-
-	go copyIO(conn, pConn, "SNT", &c)
-	go copyIO(pConn, conn, "RCV", &c)
-
-	for i := 0; i < 2; i++ {
-		select {
-		case s := <-c:
-			verb("%s: %d", s.dir, s.bytes)
-		}
-	}
 }
