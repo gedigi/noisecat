@@ -1,6 +1,8 @@
 # noisecat :smirk_cat:
 The noise pipes swiss army knife
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/gedigi/noisecat)](https://goreportcard.com/report/github.com/gedigi/noisecat)
+
 noisecat :smirk_cat: is a featured networking utility which reads and writes data across network connections, using the [Noise Protocol Framework](http://noiseprotocol.org) (and TCP/IP).
 
 ## Usage
