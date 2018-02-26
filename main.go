@@ -1,42 +1,13 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"flag"
 	"os"
-	"strings"
-
-	"github.com/gedigi/noise"
 )
 
-// Configuration parameters
-type Configuration struct {
-	srcPort string
-	srcHost string
-	dstPort string
-	dstHost string
+func parseFlags() Configuration {
+	var config Configuration
 
-	executeCmd string
-	proxy      string
-	listen     bool
-	verbose    bool
-	daemon     bool
-
-	protocol string
-	pattern  noise.HandshakePattern
-	dh       noise.DHFunc
-	cipher   noise.CipherFunc
-	hash     noise.HashFunc
-
-	psk     string
-	rStatic string
-}
-
-var config Configuration
-var noiseconfig noise.Config
-
-func init() {
 	flag.Usage = noisecatUsage
 	flag.StringVar(&config.executeCmd, "e", "", "Executes the given `command`")
 	flag.StringVar(&config.proxy, "proxy", "", "`address:port` combination to forward connections to (-l required)")
@@ -49,110 +20,36 @@ func init() {
 	flag.StringVar(&config.psk, "psk", "", "`pre-shared key` to use (max 32 bytes)")
 	flag.StringVar(&config.rStatic, "rstatic", "", "`static key` of the remote peer (32 bytes, hex-encoded)")
 	flag.Parse()
+	if !config.listen && flag.NArg() != 2 {
+		flag.Usage()
+		os.Exit(-1)
+	} else {
+		config.dstHost = flag.Arg(0)
+		config.dstPort = flag.Arg(1)
+	}
+	return config
 }
 
 func main() {
 	var err error
 
-	config.pattern, config.dh, config.cipher, config.hash, err = parseProtocol(config.protocol)
-	if err != nil {
+	config := parseFlags()
+
+	if err = config.parseConfig(); err != nil {
 		fatalf("%s", err)
 	}
 
-	if config.psk != "" {
-		if len(config.psk) > 32 {
-			fatalf("Pre-shared key can be 32 bytes maximum")
-		} else if len(config.psk) < 32 {
-			config.psk += strings.Repeat("\x00", 32-len(config.psk))
-		}
+	if err = config.parseNoiseConfig(); err != nil {
+		fatalf("%s", err)
 	}
 
-	if config.rStatic != "" {
-		if len(config.rStatic) != 64 {
-			fatalf("Remote static key needs to be 32 bytes")
-		} else {
-			rStatic, err := hex.DecodeString(config.rStatic)
-			if err != nil {
-				fatalf("Invalid remote static key")
-			}
-			config.rStatic = string(rStatic)
-		}
+	nc := noisecat{
+		config: &config,
 	}
-
-	if config.daemon {
-		if !config.listen {
-			fatalf("-k requires -l")
-		}
-		if config.proxy == "" && config.executeCmd == "" {
-			fatalf("-k requires -proxy or -e")
-		}
-	}
-	if config.proxy != "" && !config.listen {
-		fatalf("Client mode doesn't support -proxy")
-	}
-	prepareNoiseConfig()
 
 	if config.listen == false {
-		if flag.NArg() != 2 {
-			flag.Usage()
-			os.Exit(-1)
-		} else {
-			if config.daemon {
-				fatalf("Daemon mode is only possible with -l")
-			}
-			config.dstHost = flag.Arg(0)
-			config.dstPort = flag.Arg(1)
-			startClient()
-		}
+		nc.startClient()
 	} else {
-		startServer()
-	}
-}
-
-func prepareNoiseConfig() {
-	var err error
-
-	cs := noise.NewCipherSuite(config.dh, config.cipher, config.hash)
-
-	noiseconfig = noise.Config{
-		CipherSuite: cs,
-		Random:      rand.Reader,
-		Pattern:     config.pattern,
-		Initiator:   !config.listen,
-	}
-
-	if config.psk != "" {
-		noiseconfig.PresharedKey = []byte(config.psk)
-	}
-	if noiseconfig.Initiator {
-		switch noiseconfig.Pattern.Name[0] {
-		case 'X', 'I', 'K':
-			noiseconfig.StaticKeypair, err = cs.GenerateKeypair(rand.Reader)
-			if err != nil {
-				fatalf("Can't generate keys")
-			}
-		}
-		switch noiseconfig.Pattern.Name[1] {
-		case 'K':
-			if config.rStatic == "" {
-				fatalf("You need to provide the remote peer static key (-rstatic)")
-			}
-			noiseconfig.PeerStatic = []byte(config.rStatic)
-		}
-	} else {
-		switch noiseconfig.Pattern.Name[0] {
-		case 'K':
-			if config.rStatic == "" {
-				fatalf("You need to provide the remote peer static key (-rstatic)")
-			}
-			noiseconfig.PeerStatic = []byte(config.rStatic)
-		}
-		switch noiseconfig.Pattern.Name[1] {
-		case 'X', 'K':
-			noiseconfig.StaticKeypair, err = cs.GenerateKeypair(rand.Reader)
-			if err != nil {
-				fatalf("Can't generate keys")
-			}
-		}
+		nc.startServer()
 	}
 }

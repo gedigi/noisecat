@@ -10,74 +10,93 @@ import (
 	"github.com/gedigi/noise"
 )
 
-// -- Network functions
-func startClient() {
-	netAddress := net.JoinHostPort(config.dstHost, config.dstPort)
-	localAddress := net.JoinHostPort(config.srcHost, config.srcPort)
+type noisecat struct {
+	config *Configuration
+}
 
-	conn, err := noise.Dial("tcp", netAddress, localAddress, &noiseconfig)
+// -- Network functions
+func (n *noisecat) startClient() {
+
+	netAddress := net.JoinHostPort(n.config.dstHost, n.config.dstPort)
+	localAddress := net.JoinHostPort(n.config.srcHost, n.config.srcPort)
+
+	conn, err := noise.Dial("tcp", netAddress, localAddress, n.config.noiseConfig)
 	if err != nil {
 		fatalf("Can't connect to %s/tcp: %s", netAddress, err)
 	}
-	verb("Connected to %s", conn.RemoteAddr().String())
-	if noiseconfig.StaticKeypair.Public != nil {
-		verb("Local static key: %x", noiseconfig.StaticKeypair.Public)
+	if n.config.verbose {
+		verb("Connected to %s", conn.RemoteAddr().String())
 	}
-	if config.executeCmd != "" {
-		executeCmd(conn)
+	if n.config.noiseConfig.StaticKeypair.Public != nil {
+		if n.config.verbose {
+			verb("Local static key: %x", n.config.noiseConfig.StaticKeypair.Public)
+		}
+	}
+	if n.config.executeCmd != "" {
+		n.executeCmd(conn)
 	} else {
-		handleIO(conn)
+		n.handleIO(conn)
 	}
 }
 
-func startServer() {
-	netAddress := net.JoinHostPort(config.srcHost, config.srcPort)
+func (n *noisecat) startServer() {
+	netAddress := net.JoinHostPort(n.config.srcHost, n.config.srcPort)
 
-	listener, err := noise.Listen("tcp", netAddress, &noiseconfig)
+	listener, err := noise.Listen("tcp", netAddress, n.config.noiseConfig)
 	if err != nil {
 		fatalf("Can't listen: %s", err)
 	}
 
-	verb("Listening on %s/tcp", listener.Addr())
-	if noiseconfig.StaticKeypair.Public != nil {
-		verb("Local static key: %x", noiseconfig.StaticKeypair.Public)
+	if n.config.verbose {
+		verb("Listening on %s/tcp", listener.Addr())
+	}
+	if n.config.noiseConfig.StaticKeypair.Public != nil {
+		if n.config.verbose {
+			verb("Local static key: %x", n.config.noiseConfig.StaticKeypair.Public)
+		}
 	}
 
-	if config.daemon {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				fatalf("Can't accept connection: %s", err)
-			}
-			remoteAddr := conn.RemoteAddr().String()
-			verb("Connection from %s", remoteAddr)
-			if config.executeCmd != "" {
-				go executeCmd(conn)
-			} else {
-				go handleIO(conn)
-			}
-		}
-	} else {
+	acceptConnections := func() {
 		conn, err := listener.Accept()
 		if err != nil {
 			fatalf("Can't accept connection: %s", err)
 		}
-
-		verb("Connection from %s", conn.RemoteAddr().String())
-		if config.executeCmd != "" {
-			executeCmd(conn)
-		} else {
-			handleIO(conn)
+		if n.config.verbose {
+			verb("Connection from %s", conn.RemoteAddr().String())
 		}
+		if n.config.daemon {
+			if n.config.executeCmd != "" {
+				go n.executeCmd(conn)
+
+			} else {
+				go n.handleIO(conn)
+			}
+		} else {
+			if n.config.executeCmd != "" {
+				n.executeCmd(conn)
+
+			} else {
+				n.handleIO(conn)
+			}
+		}
+
+	}
+
+	if n.config.daemon {
+		for {
+			acceptConnections()
+		}
+	} else {
+		acceptConnections()
 	}
 }
 
 // -- Network helper functions
-func executeCmd(conn net.Conn) {
+func (n *noisecat) executeCmd(conn net.Conn) {
 	defer func() {
 		conn.Close()
 	}()
-	cmdParse := strings.Split(config.executeCmd, " ")
+	cmdParse := strings.Split(n.config.executeCmd, " ")
 	cmdName := cmdParse[0]
 	var cmdArgs []string
 	if len(cmdParse[1:]) > 0 {
@@ -92,13 +111,13 @@ func executeCmd(conn net.Conn) {
 	}
 }
 
-func handleIO(conn net.Conn) {
+func (n *noisecat) handleIO(conn net.Conn) {
 	c := make(chan progress)
 	var w io.WriteCloser
 	var r io.ReadCloser
 
-	if config.proxy != "" {
-		pConn, err := net.Dial("tcp", config.proxy)
+	if n.config.proxy != "" {
+		pConn, err := net.Dial("tcp", n.config.proxy)
 		if err != nil {
 			fatalf("Can't connect to remote host: %s", err)
 		}
@@ -107,23 +126,25 @@ func handleIO(conn net.Conn) {
 		r = os.Stdin
 		w = os.Stdout
 	}
-	go copyIO(conn, r, "SNT", &c)
-	go copyIO(w, conn, "RCV", &c)
+	go n.copyIO(conn, r, "SNT", &c)
+	go n.copyIO(w, conn, "RCV", &c)
 
 	for i := 0; i < 2; i++ {
 		select {
 		case s := <-c:
-			verb("%s: %d", s.dir, s.bytes)
+			if n.config.verbose {
+				verb("%s: %d", s.dir, s.bytes)
+			}
 		}
 	}
 }
 
-func copyIO(writer io.WriteCloser, reader io.ReadCloser, dir string, c *chan progress) {
+func (n *noisecat) copyIO(writer io.WriteCloser, reader io.ReadCloser, dir string, c *chan progress) {
 	defer func() {
 		reader.Close()
 		writer.Close()
 	}()
-	n, _ := io.Copy(writer, reader)
+	numBytes, _ := io.Copy(writer, reader)
 
-	*c <- progress{bytes: n, dir: dir}
+	*c <- progress{bytes: numBytes, dir: dir}
 }

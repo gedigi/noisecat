@@ -60,9 +60,7 @@ func listDetails(p protoInfo, field string) {
 // -- Logging
 
 func verb(format string, v ...interface{}) {
-	if config.verbose == true {
-		log.Printf(format, v...)
-	}
+	log.Printf(format, v...)
 }
 
 func fatalf(format string, v ...interface{}) {
