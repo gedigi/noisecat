@@ -73,4 +73,3 @@ Other features are:
 - [x] add Makefile
 - [ ] add a static key validator helper function
 - [ ] add new features (suggestions are welcome, pull requests too!)
-- [ ] new features...???
