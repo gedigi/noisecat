@@ -1,5 +1,5 @@
 # noisecat :smirk_cat:
-The noise pipes swiss army knife
+The noise swiss army knife
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/gedigi/noisecat)](https://goreportcard.com/report/github.com/gedigi/noisecat) [![Build Status](https://travis-ci.org/gedigi/noisecat.svg?branch=master)](https://travis-ci.org/gedigi/noisecat)
 
