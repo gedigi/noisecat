@@ -3,6 +3,7 @@
 *.dll
 *.so
 *.dylib
+noisecat-*
 bin/*
 
 # Test binary, build with `go test -c`
