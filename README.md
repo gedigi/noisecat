@@ -66,8 +66,8 @@ Other features are:
 * `-k` accepts multiple connections (like ncat)
 
 ## TODO
-- [ ] write some tests
+- [x] write some tests
+- [x] add Makefile
 - [ ] add a static key validator helper function
 - [ ] add new features (suggestions are welcome, pull requests too!)
-- [ ] add some helper scripts (Makefile?)
-- [ ] ...???
+- [ ] new features...???
