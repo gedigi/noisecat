@@ -1,0 +1,9 @@
+language: go
+notifications:
+  email: false
+before_script:
+  - go get github.com/gedigi/noise/...
+script:
+  - make clean
+  - make test
+  - make all
