@@ -6,7 +6,7 @@ The noise swiss army knife
 noisecat :smirk_cat: is a featured networking utility which reads and writes data across network connections, using the [Noise Protocol Framework](http://noiseprotocol.org) (and TCP/IP).
 
 ## Download and build
-Just `git clone` it, `make` it and you'll have binaries for macOS, Linux, and Windows.
+Just `git clone` it, fetch dependencies using `go get github.com/gedigi/noise/...`, `make` it and you'll have binaries for macOS, Linux, and Windows.
 
 ## Usage
 This is how `noisecat -h` looks like:
