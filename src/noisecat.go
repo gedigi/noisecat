@@ -2,8 +2,11 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 )
+
+var version = "1.0"
 
 func parseFlags() Configuration {
 	var config Configuration
@@ -17,9 +20,14 @@ func parseFlags() Configuration {
 	flag.StringVar(&config.srcPort, "p", "0", "source `port` to use")
 	flag.StringVar(&config.srcHost, "s", "", "source `address` to use")
 	flag.StringVar(&config.protocol, "proto", "Noise_NN_25519_AESGCM_SHA256", "`protocol name` to use")
-	flag.StringVar(&config.psk, "psk", "", "`pre-shared key` to use (max 32 bytes)")
-	flag.StringVar(&config.rStatic, "rstatic", "", "`static key` of the remote peer (32 bytes, hex-encoded)")
+	flag.StringVar(&config.psk, "psk", "", "`pre-shared key` to use")
+	flag.StringVar(&config.rStatic, "rstatic", "", "`static key` of the remote peer (32 bytes, base64)")
+	flag.StringVar(&config.lStatic, "lstatic", "", "`file` containing local keypair (use -keygen to generate)")
+	flag.BoolVar(&config.keygen, "keygen", false, "generates 25519 keypair and prints it to stdout")
 	flag.Parse()
+	if config.keygen {
+		return config
+	}
 	if !config.listen && flag.NArg() != 2 {
 		flag.Usage()
 		os.Exit(-1)
@@ -34,17 +42,19 @@ func main() {
 	var err error
 
 	config := parseFlags()
+	l = verbose(config.verbose)
 
 	if err = config.parseConfig(); err != nil {
-		fatalf("%s", err)
-	}
-
-	if err = config.parseNoiseConfig(); err != nil {
-		fatalf("%s", err)
+		l.fatalf("%s", err)
 	}
 
 	nc := noisecat{
 		config: &config,
+	}
+
+	if config.keygen {
+		fmt.Printf("%s\n", nc.generateKeypair())
+		os.Exit(0)
 	}
 
 	if config.listen == false {

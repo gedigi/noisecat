@@ -2,9 +2,11 @@ package main
 
 import (
 	"crypto/rand"
-	"encoding/hex"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
-	"strings"
+	"io/ioutil"
 
 	"github.com/gedigi/noise"
 )
@@ -21,6 +23,7 @@ type Configuration struct {
 	listen     bool
 	verbose    bool
 	daemon     bool
+	keygen     bool
 
 	protocol string
 	pattern  noise.HandshakePattern
@@ -30,6 +33,7 @@ type Configuration struct {
 
 	psk     string
 	rStatic string
+	lStatic string
 
 	noiseConfig *noise.Config
 }
@@ -42,23 +46,9 @@ func (config *Configuration) parseConfig() error {
 		return err
 	}
 
-	if config.psk != "" {
-		if len(config.psk) > 32 {
-			return errors.New("Pre-shared key can be 32 bytes maximum")
-		} else if len(config.psk) < 32 {
-			config.psk += strings.Repeat("\x00", 32-len(config.psk))
-		}
-	}
-
-	if config.rStatic != "" {
-		if len(config.rStatic) != 64 {
-			return errors.New("Remote static key needs to be 32 bytes")
-		}
-		rStatic, err := hex.DecodeString(config.rStatic)
-		if err != nil {
-			return errors.New("Invalid remote static key")
-		}
-		config.rStatic = string(rStatic)
+	// Skip all the checks if I only have to generate a keypair
+	if config.keygen {
+		return nil
 	}
 
 	if config.daemon {
@@ -72,11 +62,6 @@ func (config *Configuration) parseConfig() error {
 	if config.proxy != "" && !config.listen {
 		return errors.New("Client mode doesn't support -proxy")
 	}
-	return nil
-}
-
-func (config *Configuration) parseNoiseConfig() error {
-	var err error
 
 	cs := noise.NewCipherSuite(config.dh, config.cipher, config.hash)
 	config.noiseConfig = &noise.Config{
@@ -87,36 +72,66 @@ func (config *Configuration) parseNoiseConfig() error {
 	}
 
 	if config.psk != "" {
-		config.noiseConfig.PresharedKey = []byte(config.psk)
+		h := sha256.New()
+		h.Write([]byte(config.psk))
+		config.noiseConfig.PresharedKey = h.Sum(nil)
 	}
-	if config.noiseConfig.Initiator {
-		switch config.noiseConfig.Pattern.Name[0] {
-		case 'X', 'I', 'K':
+
+	checkLocalKeypair := func() error {
+		if config.lStatic != "" {
+			k, err := ioutil.ReadFile(config.lStatic)
+			if err != nil {
+				return errors.New("Can't read keyfile")
+			}
+			json.Unmarshal(k, &config.noiseConfig.StaticKeypair)
+		} else {
 			config.noiseConfig.StaticKeypair, err = cs.GenerateKeypair(rand.Reader)
 			if err != nil {
 				return errors.New("Can't generate keys")
 			}
 		}
+		return nil
+	}
+
+	checkRemoteStatic := func() error {
+		if config.rStatic == "" {
+			return errors.New("You need to provide the remote peer static key (-rstatic)")
+		}
+		decodedRStatic, err := base64.StdEncoding.DecodeString(config.rStatic)
+		if err != nil {
+			return errors.New("Invalid remote static key")
+		}
+		if len(decodedRStatic) != 32 {
+			return errors.New("Remote static key needs to be 32 bytes")
+		}
+		config.noiseConfig.PeerStatic = decodedRStatic
+		return nil
+	}
+
+	if config.noiseConfig.Initiator {
+		switch config.noiseConfig.Pattern.Name[0] {
+		case 'X', 'I', 'K':
+			if err = checkLocalKeypair(); err != nil {
+				return err
+			}
+		}
 		switch config.noiseConfig.Pattern.Name[1] {
 		case 'K':
-			if config.rStatic == "" {
-				return errors.New("You need to provide the remote peer static key (-rstatic)")
+			if err = checkRemoteStatic(); err != nil {
+				return err
 			}
-			config.noiseConfig.PeerStatic = []byte(config.rStatic)
 		}
 	} else {
 		switch config.noiseConfig.Pattern.Name[0] {
 		case 'K':
-			if config.rStatic == "" {
-				return errors.New("You need to provide the remote peer static key (-rstatic)")
+			if err = checkRemoteStatic(); err != nil {
+				return err
 			}
-			config.noiseConfig.PeerStatic = []byte(config.rStatic)
 		}
 		switch config.noiseConfig.Pattern.Name[1] {
 		case 'X', 'K':
-			config.noiseConfig.StaticKeypair, err = cs.GenerateKeypair(rand.Reader)
-			if err != nil {
-				return errors.New("Can't generate keys")
+			if err = checkLocalKeypair(); err != nil {
+				return err
 			}
 		}
 	}

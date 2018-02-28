@@ -78,11 +78,11 @@ var protocolInfo = protoInfo{
 // -- Handshake patterns
 var handshakePatterns = map[string]noise.HandshakePattern{
 	"NN": noise.HandshakeNN,
-	// "KN": noise.HandshakeKN,
+	"KN": noise.HandshakeKN,
 	"NK": noise.HandshakeNK,
-	// "KK": noise.HandshakeKK,
+	"KK": noise.HandshakeKK,
 	"NX": noise.HandshakeNX,
-	// "KX": noise.HandshakeKX,
+	"KX": noise.HandshakeKX,
 	"XN": noise.HandshakeXN,
 	"IN": noise.HandshakeIN,
 	"XK": noise.HandshakeXK,

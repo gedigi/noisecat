@@ -36,7 +36,7 @@ This is how `noisecat -h` looks like:
 
     Where:
       PT: Handshake pattern
-      DH: Diffie-Helman handshake function
+      DH: Diffie-Hellman handshake function
       CP: Cipher function
       HS: Hash function
 

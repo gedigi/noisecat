@@ -19,13 +19,13 @@ func noisecatUsage() {
 
 func showBanner() {
 	fmt.Println()
-	fmt.Println("noisecat - the noise pipes swiss army knife")
+	fmt.Printf("noisecat %s - the noise swiss army knife\n", version)
 	fmt.Println(" (c) Gerardo Di Giacomo 2018")
 }
 
 func listSupportedProtocols() {
 	fmt.Print("\nProtocol name format: Noise_PT_DH_CP_HS\n\n")
-	fmt.Print("Where:\n  PT: Handshake pattern\n  DH: Diffie-Helman handshake function\n")
+	fmt.Print("Where:\n  PT: Handshake pattern\n  DH: Diffie-Hellman handshake function\n")
 	fmt.Print("  CP: Cipher function\n  HS: Hash function\n\n")
 	fmt.Print("  e.g. Noise_NN_25519_AESGCM_SHA256\n\n")
 
@@ -59,12 +59,21 @@ func listDetails(p protoInfo, field string) {
 
 // -- Logging
 
-func verb(format string, v ...interface{}) {
-	log.Printf(format, v...)
+var l verbose
+
+type verbose bool
+
+func (l verbose) verb(format string, v ...interface{}) {
+	if l == true {
+		log.Printf(format, v...)
+	}
 }
 
-func fatalf(format string, v ...interface{}) {
-	log.Fatalf("ERROR: "+format, v...)
+func (l verbose) fatalf(format string, v ...interface{}) {
+	if l == true {
+		log.Printf(format, v...)
+	}
+	os.Exit(1)
 }
 
 // -- Progress struct

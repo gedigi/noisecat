@@ -1,6 +1,9 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
 	"io"
 	"net"
 	"os"
@@ -14,6 +17,20 @@ type noisecat struct {
 	config *Configuration
 }
 
+// -- Generate keypar
+func (n *noisecat) generateKeypair() []byte {
+	cs := noise.NewCipherSuite(n.config.dh, n.config.cipher, n.config.hash)
+	keypair, err := cs.GenerateKeypair(rand.Reader)
+	if err != nil {
+		l.fatalf("Can't geneate keypair")
+	}
+	output, _ := json.Marshal(keypair)
+	if err != nil {
+		l.fatalf("Can't convert to json")
+	}
+	return output
+}
+
 // -- Network functions
 func (n *noisecat) startClient() {
 
@@ -22,21 +39,13 @@ func (n *noisecat) startClient() {
 
 	conn, err := noise.Dial("tcp", netAddress, localAddress, n.config.noiseConfig)
 	if err != nil {
-		fatalf("Can't connect to %s/tcp: %s", netAddress, err)
+		l.fatalf("Can't connect to %s/tcp: %s", netAddress, err)
 	}
-	if n.config.verbose {
-		verb("Connected to %s", conn.RemoteAddr().String())
-	}
+	l.verb("Connected to %s", conn.RemoteAddr().String())
 	if n.config.noiseConfig.StaticKeypair.Public != nil {
-		if n.config.verbose {
-			verb("Local static key: %x", n.config.noiseConfig.StaticKeypair.Public)
-		}
+		l.verb("Local static key: %s", base64.StdEncoding.EncodeToString(n.config.noiseConfig.StaticKeypair.Public))
 	}
-	if n.config.executeCmd != "" {
-		n.executeCmd(conn)
-	} else {
-		n.handleIO(conn)
-	}
+	n.router(conn)
 }
 
 func (n *noisecat) startServer() {
@@ -44,50 +53,51 @@ func (n *noisecat) startServer() {
 
 	listener, err := noise.Listen("tcp", netAddress, n.config.noiseConfig)
 	if err != nil {
-		fatalf("Can't listen: %s", err)
+		l.fatalf("Can't listen: %s", err)
 	}
 
-	if n.config.verbose {
-		verb("Listening on %s/tcp", listener.Addr())
-	}
+	l.verb("Listening on %s/tcp", listener.Addr())
 	if n.config.noiseConfig.StaticKeypair.Public != nil {
-		if n.config.verbose {
-			verb("Local static key: %x", n.config.noiseConfig.StaticKeypair.Public)
-		}
+		l.verb("Local static key: %s", base64.StdEncoding.EncodeToString(n.config.noiseConfig.StaticKeypair.Public))
 	}
 
-	acceptConnections := func() {
+	acceptConnections := func() *noise.Conn {
 		conn, err := listener.Accept()
 		if err != nil {
-			fatalf("Can't accept connection: %s", err)
+			l.fatalf("Can't accept connection: %s", err)
 		}
-		if n.config.verbose {
-			verb("Connection from %s", conn.RemoteAddr().String())
-		}
-		if n.config.daemon {
-			if n.config.executeCmd != "" {
-				go n.executeCmd(conn)
-
-			} else {
-				go n.handleIO(conn)
-			}
-		} else {
-			if n.config.executeCmd != "" {
-				n.executeCmd(conn)
-
-			} else {
-				n.handleIO(conn)
-			}
-		}
-
+		l.verb("Connection from %s", conn.RemoteAddr().String())
+		return conn
 	}
 
 	if n.config.daemon {
 		for {
-			acceptConnections()
+			go n.router(acceptConnections())
 		}
 	} else {
-		acceptConnections()
+		n.router(acceptConnections())
+	}
+}
+
+func (n *noisecat) router(conn *noise.Conn) {
+	var w io.WriteCloser
+	var r io.ReadCloser
+
+	if n.config.proxy != "" {
+		pConn, err := net.Dial("tcp", n.config.proxy)
+		if err != nil {
+			l.fatalf("Can't connect to remote host: %s", err)
+		}
+		w, r = pConn, pConn
+	} else {
+		r = os.Stdin
+		w = os.Stdout
+	}
+
+	if n.config.executeCmd != "" {
+		n.executeCmd(conn)
+	} else {
+		n.handleIO(conn, w, r)
 	}
 }
 
@@ -103,48 +113,29 @@ func (n *noisecat) executeCmd(conn net.Conn) {
 		cmdArgs = cmdParse[1:]
 	}
 	cmd := exec.Command(cmdName, cmdArgs...)
-	cmd.Stdin = conn
-	cmd.Stdout = conn
-	cmd.Stderr = conn
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = conn, conn, conn
 	if err := cmd.Run(); err != nil {
-		fatalf("Can't execut command: %s", err)
+		l.fatalf("Can't execut command: %s", err)
 	}
 }
 
-func (n *noisecat) handleIO(conn net.Conn) {
+func (n *noisecat) handleIO(conn net.Conn, w io.WriteCloser, r io.ReadCloser) {
 	c := make(chan progress)
-	var w io.WriteCloser
-	var r io.ReadCloser
 
-	if n.config.proxy != "" {
-		pConn, err := net.Dial("tcp", n.config.proxy)
-		if err != nil {
-			fatalf("Can't connect to remote host: %s", err)
-		}
-		w, r = pConn, pConn
-	} else {
-		r = os.Stdin
-		w = os.Stdout
+	copyIO := func(writer io.WriteCloser, reader io.ReadCloser, dir string) {
+		defer func() {
+			reader.Close()
+			writer.Close()
+		}()
+		numBytes, _ := io.Copy(writer, reader)
+		c <- progress{bytes: numBytes, dir: dir}
 	}
-	go n.copyIO(conn, r, "SNT", &c)
-	go n.copyIO(w, conn, "RCV", &c)
+
+	go copyIO(conn, r, "SNT")
+	go copyIO(w, conn, "RCV")
 
 	for i := 0; i < 2; i++ {
-		select {
-		case s := <-c:
-			if n.config.verbose {
-				verb("%s: %d", s.dir, s.bytes)
-			}
-		}
+		s := <-c
+		l.verb("%s: %d", s.dir, s.bytes)
 	}
-}
-
-func (n *noisecat) copyIO(writer io.WriteCloser, reader io.ReadCloser, dir string, c *chan progress) {
-	defer func() {
-		reader.Close()
-		writer.Close()
-	}()
-	numBytes, _ := io.Copy(writer, reader)
-
-	*c <- progress{bytes: numBytes, dir: dir}
 }
