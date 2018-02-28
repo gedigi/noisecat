@@ -34,4 +34,4 @@ test:
 clean:
 	-rm -f ${BINARY}-*
 
-.PHONY: linux darwin windows test clean
+.PHONY: deps linux darwin windows test clean

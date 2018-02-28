@@ -77,7 +77,7 @@ func (config *Configuration) parseConfig() error {
 		config.noiseConfig.PresharedKey = h.Sum(nil)
 	}
 
-	checkLocalKeypair := func() error {
+	checkLocalStatic := func() error {
 		if config.lStatic != "" {
 			k, err := ioutil.ReadFile(config.lStatic)
 			if err != nil {
@@ -111,7 +111,7 @@ func (config *Configuration) parseConfig() error {
 	if config.noiseConfig.Initiator {
 		switch config.noiseConfig.Pattern.Name[0] {
 		case 'X', 'I', 'K':
-			if err = checkLocalKeypair(); err != nil {
+			if err = checkLocalStatic(); err != nil {
 				return err
 			}
 		}
@@ -130,7 +130,7 @@ func (config *Configuration) parseConfig() error {
 		}
 		switch config.noiseConfig.Pattern.Name[1] {
 		case 'X', 'K':
-			if err = checkLocalKeypair(); err != nil {
+			if err = checkLocalStatic(); err != nil {
 				return err
 			}
 		}

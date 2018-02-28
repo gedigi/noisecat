@@ -24,7 +24,7 @@ func (n *noisecat) generateKeypair() []byte {
 	if err != nil {
 		l.fatalf("Can't geneate keypair")
 	}
-	output, _ := json.Marshal(keypair)
+	output, err := json.Marshal(keypair)
 	if err != nil {
 		l.fatalf("Can't convert to json")
 	}
@@ -33,7 +33,6 @@ func (n *noisecat) generateKeypair() []byte {
 
 // -- Network functions
 func (n *noisecat) startClient() {
-
 	netAddress := net.JoinHostPort(n.config.dstHost, n.config.dstPort)
 	localAddress := net.JoinHostPort(n.config.srcHost, n.config.srcPort)
 
@@ -79,6 +78,7 @@ func (n *noisecat) startServer() {
 	}
 }
 
+// -- Network helper functions
 func (n *noisecat) router(conn *noise.Conn) {
 	var w io.WriteCloser
 	var r io.ReadCloser
@@ -101,7 +101,6 @@ func (n *noisecat) router(conn *noise.Conn) {
 	}
 }
 
-// -- Network helper functions
 func (n *noisecat) executeCmd(conn net.Conn) {
 	defer func() {
 		conn.Close()
