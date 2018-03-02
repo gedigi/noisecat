@@ -15,14 +15,6 @@ type ProtoInfo struct {
 	HashFuncs         map[string]noise.HashFunc
 }
 
-// -- Hash functions
-var hashFuncs = map[string]noise.HashFunc{
-	"SHA256":  noise.HashSHA256,
-	"SHA512":  noise.HashSHA512,
-	"BLAKE2b": noise.HashBLAKE2b,
-	"BLAKE2s": noise.HashBLAKE2s,
-}
-
 // -- Protocol parsing
 func (p *ProtoInfo) parseProtocol(protoName string) (noise.HandshakePattern, noise.DHFunc, noise.CipherFunc, noise.HashFunc, error) {
 	var hs noise.HandshakePattern
@@ -69,14 +61,14 @@ func (p *ProtoInfo) getConfig(field string, search string) interface{} {
 }
 
 var protocolInfo = ProtoInfo{
-	HandshakePatterns: handshakePatterns,
-	DHFuncs:           dhFuncs,
-	CipherFuncs:       cipherFuncs,
-	HashFuncs:         hashFuncs,
+	HandshakePatterns: HandshakePatterns,
+	DHFuncs:           DHFuncs,
+	CipherFuncs:       CipherFuncs,
+	HashFuncs:         HashFuncs,
 }
 
 // -- Handshake patterns
-var handshakePatterns = map[string]noise.HandshakePattern{
+var HandshakePatterns = map[string]noise.HandshakePattern{
 	"NN": noise.HandshakeNN,
 	"KN": noise.HandshakeKN,
 	"NK": noise.HandshakeNK,
@@ -92,12 +84,20 @@ var handshakePatterns = map[string]noise.HandshakePattern{
 }
 
 // -- DH functions
-var dhFuncs = map[string]noise.DHFunc{
+var DHFuncs = map[string]noise.DHFunc{
 	"25519": noise.DH25519,
 }
 
 // -- Cipher functions
-var cipherFuncs = map[string]noise.CipherFunc{
+var CipherFuncs = map[string]noise.CipherFunc{
 	"AESGCM":     noise.CipherAESGCM,
 	"ChaChaPoly": noise.CipherChaChaPoly,
+}
+
+// -- Hash functions
+var HashFuncs = map[string]noise.HashFunc{
+	"SHA256":  noise.HashSHA256,
+	"SHA512":  noise.HashSHA512,
+	"BLAKE2b": noise.HashBLAKE2b,
+	"BLAKE2s": noise.HashBLAKE2s,
 }

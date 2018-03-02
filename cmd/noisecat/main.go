@@ -91,16 +91,16 @@ func listSupportedProtocols() {
 	fmt.Print("  e.g. Noise_NN_25519_AESGCM_SHA256\n\n")
 
 	fmt.Print("Available handshake patterns:\n")
-	listDetails(protoInfo{HandshakePatterns: handshakePatterns}, "HandshakePatterns")
+	listDetails(noisecat.ProtoInfo{HandshakePatterns: noisecat.HandshakePatterns}, "HandshakePatterns")
 
 	fmt.Print("Available DH functions:\n")
-	listDetails(protoInfo{DHFuncs: dhFuncs}, "DHFuncs")
+	listDetails(noisecat.ProtoInfo{DHFuncs: noisecat.DHFuncs}, "DHFuncs")
 
 	fmt.Print("Available Cipher functions:\n")
-	listDetails(protoInfo{CipherFuncs: cipherFuncs}, "CipherFuncs")
+	listDetails(noisecat.ProtoInfo{CipherFuncs: noisecat.CipherFuncs}, "CipherFuncs")
 
 	fmt.Print("Available Hash functions:\n")
-	listDetails(protoInfo{HashFuncs: hashFuncs}, "HashFuncs")
+	listDetails(noisecat.ProtoInfo{HashFuncs: noisecat.HashFuncs}, "HashFuncs")
 }
 
 func listDetails(p noisecat.ProtoInfo, field string) {

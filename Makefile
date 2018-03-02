@@ -1,37 +1,68 @@
-BINARY = noisecat
+NOISECAT_BIN = noisecat
+NOISESOCAT_BIN = noisesocat
 GOARCH = amd64
 
 CURRENT_DIR=$(shell pwd)
-SOURCE_DIR=${CURRENT_DIR}/src
-BIN_DIR=${CURRENT_DIR}/bin
+NOISECAT_SRC=${CURRENT_DIR}/cmd/noisecat
+NOISESOCAT_SRC=${CURRENT_DIR}/cmd/noisesocat
 
-# Build the project
-all: linux darwin windows
+NOISECAT_TEST=${CURRENT_DIR}/pkg/noisecat
+NOISESOCAT_TEST=${CURRENT_DIR}/pkg/noisesocat
+
+# -- generic --
+all: test noisecat noisesocat
+
+test: test_noisecat test_noisesocat
+noisecat: deps linux_noisecat darwin_noisecat windows_noisecat
+noisesocat: deps linux_noisesocat darwin_noisesocat windows_noisesocat
 
 deps:
 	go get github.com/gedigi/noisecat/...
 
-linux: deps
-	cd ${SOURCE_DIR}; \
-	GOOS=linux GOARCH=${GOARCH} go build -o ${CURRENT_DIR}/${BINARY}-linux-${GOARCH} . ; \
+# -- noisecat --
+linux_noisecat: deps
+	cd ${NOISECAT_SRC}; \
+	GOOS=linux GOARCH=${GOARCH} go build -o ${CURRENT_DIR}/${NOISECAT_BIN}-linux-${GOARCH} . ; \
 	cd ${CURRENT_DIR} >/dev/null
 
-darwin: deps
-	cd ${SOURCE_DIR}; \
-	GOOS=darwin GOARCH=${GOARCH} go build -o ${CURRENT_DIR}/${BINARY}-darwin-${GOARCH} . ; \
+darwin_noisecat: deps
+	cd ${NOISECAT_SRC}; \
+	GOOS=darwin GOARCH=${GOARCH} go build -o ${CURRENT_DIR}/${NOISECAT_BIN}-darwin-${GOARCH} . ; \
 	cd ${CURRENT_DIR} >/dev/null
 
-windows: deps
-	cd ${SOURCE_DIR}; \
-	GOOS=windows GOARCH=${GOARCH} go build -o ${CURRENT_DIR}/${BINARY}-windows-${GOARCH}.exe . ; \
+windows_noisecat: deps
+	cd ${NOISECAT_SRC}; \
+	GOOS=windows GOARCH=${GOARCH} go build -o ${CURRENT_DIR}/${NOISECAT_BIN}-windows-${GOARCH}.exe . ; \
 	cd ${CURRENT_DIR} >/dev/null
 
-test:
-	cd ${SOURCE_DIR}; \
+test_noisecat:
+	cd ${NOISECAT_TEST}; \
 	go test -v
 	cd ${CURRENT_DIR} >/dev/null
 
-clean:
-	-rm -f ${BINARY}-*
+# -- noisesocat --
+linux_noisesocat: deps
+	cd ${NOISESOCAT_SRC}; \
+	GOOS=linux GOARCH=${GOARCH} go build -o ${CURRENT_DIR}/${NOISESOCAT_BIN}-linux-${GOARCH} . ; \
+	cd ${CURRENT_DIR} >/dev/null
 
-.PHONY: linux darwin windows test clean
+darwin_noisesocat: deps
+	cd ${NOISESOCAT_SRC}; \
+	GOOS=darwin GOARCH=${GOARCH} go build -o ${CURRENT_DIR}/${NOISESOCAT_BIN}-darwin-${GOARCH} . ; \
+	cd ${CURRENT_DIR} >/dev/null
+
+windows_noisesocat: deps
+	cd ${NOISESOCAT_SRC}; \
+	GOOS=windows GOARCH=${GOARCH} go build -o ${CURRENT_DIR}/${NOISESOCAT_BIN}-windows-${GOARCH}.exe . ; \
+	cd ${CURRENT_DIR} >/dev/null
+
+test_noisesocat:
+	cd ${NOISESOCAT_TEST}; \
+	go test -v
+	cd ${CURRENT_DIR} >/dev/null
+	
+
+clean:
+	-rm -f ${NOISECAT_BIN}-* ${NOISESOCAT_BIN}-*
+
+.PHONY: noisecat noisesocat all deps
