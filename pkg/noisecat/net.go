@@ -119,7 +119,7 @@ func (n *Noisecat) executeCmd(conn net.Conn) {
 	cmd := exec.Command(cmdName, cmdArgs...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = conn, conn, conn
 	if err := cmd.Run(); err != nil {
-		n.L.Fatalf("Can't execut command: %s", err)
+		n.L.Fatalf("Can't execute command: %s", err)
 	}
 }
 
