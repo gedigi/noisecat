@@ -24,7 +24,7 @@ func parseFlags() Configuration {
 	flag.BoolVar(&config.keygen, "keygen", false, "generates 25519 keypair and prints it to stdout")
 	flag.StringVar(&config.dhFunc, "dhFunc", "25519", "`DH` function to use")
 	flag.StringVar(&config.cipherFunc, "cipherFunc", "AESGCM", "`cipher` function to use")
-	flag.StringVar(&config.hashFunc, "hashFunc", "BLAKE2b", "`hash` function to use")
+	flag.StringVar(&config.hashFunc, "hashFunc", "SHA256", "`hash` function to use")
 
 	flag.Parse()
 	if config.keygen {

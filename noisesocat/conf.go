@@ -37,7 +37,13 @@ type Configuration struct {
 func (config *Configuration) parseConfig() error {
 	var err error
 
-	config.noiseConfig = &noisesocket.ConnectionConfig{}
+	config.noiseConfig = new(noisesocket.ConnectionConfig)
+
+	config.noiseConfig.DHFunc, config.noiseConfig.CipherFunc, config.noiseConfig.HashFunc, err =
+		protocolInfo.parseProtocol("Noise_XX_" + config.dhFunc + "_" + config.cipherFunc + "_" + config.hashFunc)
+	if err != nil {
+		return err
+	}
 
 	// Skip all the checks if I only have to generate a keypair
 	if config.keygen {

@@ -1,13 +1,13 @@
 package main
 
 import (
-	"crypto/rand"
 	"io/ioutil"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/gedigi/noise"
+	"github.com/gedigi/noisesocket"
 )
 
 func TestClientServer(t *testing.T) {
@@ -19,19 +19,17 @@ func TestClientServer(t *testing.T) {
 	os.Remove(tmpFileName)
 	cmd := "touch " + tmpFileName
 
-	cs := noise.NewCipherSuite(noise.DH25519, noise.CipherAESGCM, noise.HashSHA512)
-
 	ncClient.config = &Configuration{
 		srcPort: "0",
 		dstHost: "127.0.0.1",
 		dstPort: "12345",
 		verbose: true,
 		listen:  false,
-		noiseConfig: &noise.Config{
-			Pattern:     noise.HandshakeNN,
-			CipherSuite: cs,
-			Random:      rand.Reader,
-			Initiator:   true,
+		noiseConfig: &noisesocket.ConnectionConfig{
+			IsClient:   true,
+			DHFunc:     noise.DH25519,
+			CipherFunc: noise.CipherAESGCM,
+			HashFunc:   noise.HashSHA256,
 		},
 	}
 	ncServer.config = &Configuration{
@@ -40,11 +38,9 @@ func TestClientServer(t *testing.T) {
 		verbose:    true,
 		listen:     true,
 		executeCmd: cmd,
-		noiseConfig: &noise.Config{
-			Pattern:     noise.HandshakeNN,
-			CipherSuite: cs,
-			Random:      rand.Reader,
-			Initiator:   false,
+		noiseConfig: &noisesocket.ConnectionConfig{
+			IsClient: false,
+			DHFunc:   noise.DH25519,
 		},
 	}
 

@@ -15,38 +15,25 @@ type protoInfo struct {
 	HashFuncs         map[string]noise.HashFunc
 }
 
-// -- Hash functions
-var hashFuncs = map[string]noise.HashFunc{
-	"SHA256":  noise.HashSHA256,
-	"SHA512":  noise.HashSHA512,
-	"BLAKE2b": noise.HashBLAKE2b,
-	"BLAKE2s": noise.HashBLAKE2s,
-}
-
 // -- Protocol parsing
-func (p *protoInfo) parseProtocol(protoName string) (noise.HandshakePattern, noise.DHFunc, noise.CipherFunc, noise.HashFunc, error) {
-	var hs noise.HandshakePattern
+func (p *protoInfo) parseProtocol(protoName string) (noise.DHFunc, noise.CipherFunc, noise.HashFunc, error) {
 	var dh noise.DHFunc
 	var cipher noise.CipherFunc
 	var hash noise.HashFunc
 	var err error
 	var ok bool
-	regEx := regexp.MustCompile(`Noise_(\w{2})_(\w+)_(\w+)_(\w+)`)
+	regEx := regexp.MustCompile(`Noise_XX_(\w+)_(\w+)_(\w+)`)
 	results := regEx.FindStringSubmatch(protoName)
-	if len(results) == 5 {
-		if hs, ok = p.getConfig("HandshakePatterns", results[1]).(noise.HandshakePattern); ok == false {
-			err = errors.New("Invalid handshake pattern")
-			goto exit
-		}
-		if dh, ok = p.getConfig("DHFuncs", results[2]).(noise.DHFunc); ok == false {
+	if len(results) == 4 {
+		if dh, ok = p.getConfig("DHFuncs", results[1]).(noise.DHFunc); ok == false {
 			err = errors.New("Invalid DH function")
 			goto exit
 		}
-		if cipher, ok = p.getConfig("CipherFuncs", results[3]).(noise.CipherFunc); ok == false {
+		if cipher, ok = p.getConfig("CipherFuncs", results[2]).(noise.CipherFunc); ok == false {
 			err = errors.New("Invalid cipher function")
 			goto exit
 		}
-		if hash, ok = p.getConfig("HashFuncs", results[4]).(noise.HashFunc); ok == false {
+		if hash, ok = p.getConfig("HashFuncs", results[3]).(noise.HashFunc); ok == false {
 			err = errors.New("Invalid hash function")
 			goto exit
 		}
@@ -55,7 +42,7 @@ func (p *protoInfo) parseProtocol(protoName string) (noise.HandshakePattern, noi
 		err = errors.New("Invalid protocol name")
 	}
 exit:
-	return hs, dh, cipher, hash, err
+	return dh, cipher, hash, err
 }
 
 func (p *protoInfo) getConfig(field string, search string) interface{} {
@@ -83,4 +70,12 @@ var dhFuncs = map[string]noise.DHFunc{
 var cipherFuncs = map[string]noise.CipherFunc{
 	"AESGCM":     noise.CipherAESGCM,
 	"ChaChaPoly": noise.CipherChaChaPoly,
+}
+
+// -- Hash functions
+var hashFuncs = map[string]noise.HashFunc{
+	"SHA256":  noise.HashSHA256,
+	"SHA512":  noise.HashSHA512,
+	"BLAKE2b": noise.HashBLAKE2b,
+	"BLAKE2s": noise.HashBLAKE2s,
 }

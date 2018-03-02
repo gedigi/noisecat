@@ -41,6 +41,8 @@ type Configuration struct {
 func (config *Configuration) parseConfig() error {
 	var err error
 
+	config.noiseConfig = &noise.Config{}
+
 	config.pattern, config.dh, config.cipher, config.hash, err = protocolInfo.parseProtocol(config.protocol)
 	if err != nil {
 		return err
