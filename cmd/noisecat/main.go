@@ -27,7 +27,7 @@ func parseFlags() common.Configuration {
 	flag.StringVar(&config.PSK, "psk", "", "`pre-shared key` to use")
 	flag.StringVar(&config.RStatic, "rstatic", "", "`static key` of the remote peer (32 bytes, base64)")
 	flag.StringVar(&config.LStatic, "lstatic", "", "`file` containing local keypair (use -keygen to generate)")
-	flag.BoolVar(&config.Keygen, "keygen", false, "generates 25519 keypair and prints it to stdout")
+	flag.BoolVar(&config.Keygen, "keygen", false, "generates \"-proto\" appropriate keypair and prints it to stdout")
 	flag.Parse()
 	if config.Keygen {
 		return config

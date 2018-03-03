@@ -21,7 +21,7 @@ noisecat: deps linux_noisecat darwin_noisecat windows_noisecat
 noisesocat: deps linux_noisesocat darwin_noisesocat windows_noisesocat
 
 deps:
-	go get github.com/gedigi/noisecat/...
+	go get -uf github.com/gedigi/noisecat/...
 
 # -- noisecat --
 linux_noisecat: deps
