@@ -10,6 +10,7 @@ import (
 	"regexp"
 
 	"github.com/gedigi/noise"
+	"github.com/gedigi/noisesocket"
 )
 
 // Configuration parameters
@@ -36,7 +37,7 @@ type Configuration struct {
 	RStatic string
 	LStatic string
 
-	framework string
+	Framework string
 }
 
 // ParseConfig parses a configuration struct for setup and correctness
@@ -60,25 +61,41 @@ func (config *Configuration) ParseConfig() (interface{}, error) {
 		return nil, errors.New("Client mode doesn't support -proxy")
 	}
 
-	if config.framework == "noise" {
-		noise, err := config.parseNoise()
+	var noiseConf interface{}
+	if config.Framework == "noise" {
+		noiseConf, err = config.parseNoise()
 		if err != nil {
 			return nil, err
 		}
-		return noise, nil
+	} else {
+		noiseConf, err = config.parseNoisesocket()
+		if err != nil {
+			return nil, err
+		}
 	}
-	noisesocket, err := config.parseNoisesocket()
+	return noiseConf, nil
+}
+
+func (config *Configuration) parseNoisesocket() (*noisesocket.ConnectionConfig, error) {
+	_, dh, cipher, hash, err := parseProtocolName(config.Protocol)
 	if err != nil {
 		return nil, err
 	}
-	return noisesocket, nil
+	cs := noise.NewCipherSuite(DHByteObj[dh], CipherByteObj[cipher], HashByteObj[hash])
+	noiseConf := &noisesocket.ConnectionConfig{
+		IsClient:   !config.Listen,
+		DHFunc:     dh,
+		CipherFunc: cipher,
+		HashFunc:   hash,
+	}
+	noiseConf.StaticKeypair, err = config.checkLocalKeypair(cs)
+	if err != nil {
+		return nil, err
+	}
+	return noiseConf, nil
 }
 
-func (config *Configuration) parseNoisesocket() (interface{}, error) {
-	return nil, nil
-}
-
-func (config *Configuration) parseNoise() (interface{}, error) {
+func (config *Configuration) parseNoise() (*noise.Config, error) {
 	pattern, dh, cipher, hash, err := parseProtocolName(config.Protocol)
 	if err != nil {
 		return nil, err
@@ -95,22 +112,6 @@ func (config *Configuration) parseNoise() (interface{}, error) {
 		h := sha256.New()
 		h.Write([]byte(config.PSK))
 		noiseConf.PresharedKey = h.Sum(nil)
-	}
-
-	checkLocalKeypair := func() error {
-		if config.LStatic != "" {
-			k, err := ioutil.ReadFile(config.LStatic)
-			if err != nil {
-				return errors.New("Can't read keyfile")
-			}
-			json.Unmarshal(k, &noiseConf.StaticKeypair)
-		} else {
-			noiseConf.StaticKeypair, err = cs.GenerateKeypair(rand.Reader)
-			if err != nil {
-				return errors.New("Can't generate keys")
-			}
-		}
-		return nil
 	}
 
 	checkRemoteStatic := func() error {
@@ -131,7 +132,8 @@ func (config *Configuration) parseNoise() (interface{}, error) {
 	if noiseConf.Initiator {
 		switch noiseConf.Pattern.Name[0] {
 		case 'X', 'I', 'K':
-			if err = checkLocalKeypair(); err != nil {
+			noiseConf.StaticKeypair, err = config.checkLocalKeypair(cs)
+			if err != nil {
 				return nil, err
 			}
 		}
@@ -150,12 +152,30 @@ func (config *Configuration) parseNoise() (interface{}, error) {
 		}
 		switch noiseConf.Pattern.Name[1] {
 		case 'X', 'K':
-			if err = checkLocalKeypair(); err != nil {
+			noiseConf.StaticKeypair, err = config.checkLocalKeypair(cs)
+			if err != nil {
 				return nil, err
 			}
 		}
 	}
 	return noiseConf, nil
+}
+
+func (config *Configuration) checkLocalKeypair(cs noise.CipherSuite) (noise.DHKey, error) {
+	var keypair noise.DHKey
+	if config.LStatic != "" {
+		k, err := ioutil.ReadFile(config.LStatic)
+		if err != nil {
+			return noise.DHKey{}, errors.New("Can't read keyfile")
+		}
+		json.Unmarshal(k, &keypair)
+		return keypair, nil
+	}
+	keypair, err := cs.GenerateKeypair(rand.Reader)
+	if err != nil {
+		return noise.DHKey{}, errors.New("Can't generate keys")
+	}
+	return keypair, nil
 }
 
 func parseProtocolName(protoName string) (byte, byte, byte, byte, error) {

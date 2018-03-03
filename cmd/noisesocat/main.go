@@ -27,7 +27,8 @@ func parseFlags() common.Configuration {
 	flag.StringVar(&config.LStatic, "lstatic", "", "`file` containing local keypair (use -keygen to generate)")
 	flag.BoolVar(&config.Keygen, "keygen", false, "generates 25519 keypair and prints it to stdout")
 	flag.Parse()
-	config.Protocol = "Noise_XX_25510_ChaChaPoly_BLAKE2b"
+	config.Framework = "noisesocat"
+	config.Protocol = "Noise_XX_25519_ChaChaPoly_BLAKE2b"
 	if config.Keygen {
 		return config
 	}
@@ -51,7 +52,8 @@ func main() {
 	if err != nil {
 		l.Fatalf("%s", err)
 	}
-	noiseConfig, ok := noiseConfigInterface.(noisesocket.ConnectionConfig)
+
+	noiseConfig, ok := noiseConfigInterface.(*noisesocket.ConnectionConfig)
 	if !ok {
 		l.Fatalf("%s", err)
 	}
@@ -59,7 +61,7 @@ func main() {
 	nc := noisesocat.Noisesocat{
 		Config:      &config,
 		Log:         l,
-		NoiseConfig: &noiseConfig,
+		NoiseConfig: noiseConfig,
 	}
 
 	if config.Keygen {

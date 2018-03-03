@@ -33,8 +33,7 @@ func (c *Params) proxyConn() {
 	if err != nil {
 		c.Log.Fatalf("Can't connect to remote host: %s", err)
 	}
-	w, r := pConn, pConn
-	c.handleIO(w, r)
+	c.handleIO(pConn, pConn)
 }
 
 func (c *Params) executeCmd() {

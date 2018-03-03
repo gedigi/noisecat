@@ -29,6 +29,7 @@ func parseFlags() common.Configuration {
 	flag.StringVar(&config.LStatic, "lstatic", "", "`file` containing local keypair (use -keygen to generate)")
 	flag.BoolVar(&config.Keygen, "keygen", false, "generates \"-proto\" appropriate keypair and prints it to stdout")
 	flag.Parse()
+	config.Framework = "noise"
 	if config.Keygen {
 		return config
 	}
@@ -52,7 +53,8 @@ func main() {
 	if err != nil {
 		l.Fatalf("%s", err)
 	}
-	noiseConfig, ok := noiseConfigInterface.(noise.Config)
+
+	noiseConfig, ok := noiseConfigInterface.(*noise.Config)
 	if !ok {
 		l.Fatalf("%s", err)
 	}
@@ -60,7 +62,7 @@ func main() {
 	nc := noisecat.Noisecat{
 		Config:      &config,
 		Log:         l,
-		NoiseConfig: &noiseConfig,
+		NoiseConfig: noiseConfig,
 	}
 
 	if config.Keygen {
