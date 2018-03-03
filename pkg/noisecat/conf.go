@@ -1,4 +1,4 @@
-package common
+package noisecat
 
 import (
 	"crypto/rand"
@@ -38,6 +38,27 @@ type Configuration struct {
 	LStatic string
 
 	Framework string
+}
+
+// NoiseInterface intrfaces with noise or noisesocket configurations
+type NoiseInterface interface {
+	GetLocalStaticPublic() []byte
+}
+
+// NoiseConfig is a noise configuration variable
+type NoiseConfig noise.Config
+
+// GetLocalStaticPublic returns the noise local static key forn
+func (n *NoiseConfig) GetLocalStaticPublic() []byte {
+	return n.StaticKeypair.Public
+}
+
+// Config is a noisesocket configuration variable
+type NoisesocketConfig noisesocket.ConnectionConfig
+
+// GetLocalStaticPublic returns the noisesocket local static key forn
+func (n NoisesocketConfig) GetLocalStaticPublic() []byte {
+	return n.StaticKeypair.Public
 }
 
 // ParseConfig parses a configuration struct for setup and correctness

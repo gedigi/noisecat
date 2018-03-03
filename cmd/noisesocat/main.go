@@ -6,8 +6,7 @@ import (
 	"os"
 
 	"github.com/gedigi/noisecat/pkg/common"
-	"github.com/gedigi/noisecat/pkg/noisesocat"
-	"github.com/gedigi/noisesocket"
+	"github.com/gedigi/noisecat/pkg/noisecat"
 )
 
 var version = "1.0"
@@ -53,19 +52,23 @@ func main() {
 		l.Fatalf("%s", err)
 	}
 
-	noiseConfig, ok := noiseConfigInterface.(*noisesocket.ConnectionConfig)
+	noiseConfig, ok := noiseConfigInterface.(noisecat.Config)
 	if !ok {
 		l.Fatalf("Couldn't parse Noise configuration")
 	}
 
-	nc := noisesocat.Noisesocat{
+	nc := common.Noisecat{
 		Config:      &config,
 		Log:         l,
 		NoiseConfig: noiseConfig,
 	}
 
 	if config.Keygen {
-		fmt.Printf("%s\n", nc.GenerateKeypair())
+		keypair, err := common.GenerateKeypair(config.DHFunc, config.CipherFunc, config.HashFunc)
+		if err != nil {
+			l.Fatalf("%s", err)
+		}
+		fmt.Printf("%s\n", keypair)
 		os.Exit(0)
 	}
 

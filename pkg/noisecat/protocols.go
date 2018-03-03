@@ -1,4 +1,4 @@
-package common
+package noisecat
 
 import "github.com/gedigi/noise"
 

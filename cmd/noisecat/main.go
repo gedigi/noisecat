@@ -5,15 +5,13 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gedigi/noise"
-	"github.com/gedigi/noisecat/pkg/common"
 	"github.com/gedigi/noisecat/pkg/noisecat"
 )
 
 var version = "1.0"
 
-func parseFlags() common.Configuration {
-	config := common.Configuration{}
+func parseFlags() noisecat.Configuration {
+	config := noisecat.Configuration{}
 
 	flag.Usage = Usage
 	flag.StringVar(&config.ExecuteCmd, "e", "", "Executes the given `command`")
@@ -47,14 +45,14 @@ func main() {
 	var err error
 
 	config := parseFlags()
-	l := common.Verbose(config.Verbose)
+	l := noisecat.Verbose(config.Verbose)
 
 	noiseConfigInterface, err := config.ParseConfig()
 	if err != nil {
 		l.Fatalf("%s", err)
 	}
 
-	noiseConfig, ok := noiseConfigInterface.(*noise.Config)
+	noiseConfig, ok := noiseConfigInterface.(noisecat.Config)
 	if !ok {
 		l.Fatalf("Couldn't parse Noise configuration")
 	}
@@ -66,8 +64,11 @@ func main() {
 	}
 
 	if config.Keygen {
-
-		fmt.Printf("%s\n", nc.GenerateKeypair())
+		keypair, err := noisecat.GenerateKeypair(config.DHFunc, config.CipherFunc, config.HashFunc)
+		if err != nil {
+			l.Fatalf("%s", err)
+		}
+		fmt.Printf("%s\n", keypair)
 		os.Exit(0)
 	}
 
@@ -100,16 +101,16 @@ func listSupportedProtocols() {
 	fmt.Print("  e.g. Noise_NN_25519_AESGCM_SHA256\n\n")
 
 	fmt.Print("Available handshake patterns:\n")
-	listDetails(common.PatternStrByte)
+	listDetails(noisecat.PatternStrByte)
 
 	fmt.Print("Available DH functions:\n")
-	listDetails(common.DHStrByte)
+	listDetails(noisecat.DHStrByte)
 
 	fmt.Print("Available Cipher functions:\n")
-	listDetails(common.CipherStrByte)
+	listDetails(noisecat.CipherStrByte)
 
 	fmt.Print("Available Hash functions:\n")
-	listDetails(common.HashStrByte)
+	listDetails(noisecat.HashStrByte)
 }
 
 func listDetails(m map[string]byte) {

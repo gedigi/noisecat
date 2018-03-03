@@ -1,7 +1,8 @@
-package common
+package noisecat
 
 import (
 	"io"
+	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -48,9 +49,7 @@ func (c *Params) executeCmd() {
 	}
 	cmd := exec.Command(cmdName, cmdArgs...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = c.Conn, c.Conn, c.Conn
-	if err := cmd.Run(); err != nil {
-		c.Log.Fatalf("Can't execute command: %s", err)
-	}
+	cmd.Run()
 }
 
 func (c *Params) handleIO(w io.WriteCloser, r io.ReadCloser) {
@@ -70,6 +69,6 @@ func (c *Params) handleIO(w io.WriteCloser, r io.ReadCloser) {
 
 	for i := 0; i < 2; i++ {
 		s := <-channel
-		c.Log.Verb("%s: %d", s.Dir, s.Bytes)
+		log.Printf("%s: %d", s.Dir, s.Bytes)
 	}
 }
