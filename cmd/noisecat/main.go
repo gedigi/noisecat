@@ -56,7 +56,7 @@ func main() {
 
 	noiseConfig, ok := noiseConfigInterface.(*noise.Config)
 	if !ok {
-		l.Fatalf("%s", err)
+		l.Fatalf("Couldn't parse Noise configuration")
 	}
 
 	nc := noisecat.Noisecat{
@@ -66,6 +66,7 @@ func main() {
 	}
 
 	if config.Keygen {
+
 		fmt.Printf("%s\n", nc.GenerateKeypair())
 		os.Exit(0)
 	}

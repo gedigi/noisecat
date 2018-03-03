@@ -44,11 +44,6 @@ type Configuration struct {
 func (config *Configuration) ParseConfig() (interface{}, error) {
 	var err error
 
-	// Skip all the checks if I only have to generate a keypair
-	if config.Keygen {
-		return nil, nil
-	}
-
 	if config.Daemon {
 		if !config.Listen {
 			return nil, errors.New("-k requires -l")
@@ -169,6 +164,9 @@ func (config *Configuration) checkLocalKeypair(cs noise.CipherSuite) (noise.DHKe
 			return noise.DHKey{}, errors.New("Can't read keyfile")
 		}
 		json.Unmarshal(k, &keypair)
+		if keypair.Public == nil {
+			return noise.DHKey{}, errors.New("Can't load keypair")
+		}
 		return keypair, nil
 	}
 	keypair, err := cs.GenerateKeypair(rand.Reader)

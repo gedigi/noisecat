@@ -55,7 +55,7 @@ func main() {
 
 	noiseConfig, ok := noiseConfigInterface.(*noisesocket.ConnectionConfig)
 	if !ok {
-		l.Fatalf("%s", err)
+		l.Fatalf("Couldn't parse Noise configuration")
 	}
 
 	nc := noisesocat.Noisesocat{
