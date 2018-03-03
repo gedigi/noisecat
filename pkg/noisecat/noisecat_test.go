@@ -49,6 +49,8 @@ func TestClientServer(t *testing.T) {
 		Initiator:   false,
 	}
 
+	ncClient.Log, ncServer.Log = true, true
+
 	go ncServer.StartServer()
 	time.Sleep(2 * time.Second)
 	go ncClient.StartClient()

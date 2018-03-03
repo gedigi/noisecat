@@ -58,7 +58,7 @@ func TestClientServer(t *testing.T) {
 		StaticKeypair: serverKey,
 	}
 
-	ncClient.L, ncServer.L = true, true
+	ncClient.Log, ncServer.Log = true, true
 
 	go ncServer.StartServer()
 	time.Sleep(2 * time.Second)
