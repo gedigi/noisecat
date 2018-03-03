@@ -11,6 +11,8 @@ NOISESOCAT_TEST=${CURRENT_DIR}/pkg/noisesocat
 
 BIN_DIR=${CURRENT_DIR}/bin
 
+LDFLAGS="-s -w"
+
 # -- generic --
 all: noisecat noisesocat
 
@@ -24,17 +26,17 @@ deps:
 # -- noisecat --
 linux_noisecat: deps
 	cd ${NOISECAT_SRC}; \
-	GOOS=linux GOARCH=${GOARCH} go build -o ${BIN_DIR}/${NOISECAT_BIN}-linux-${GOARCH} . ; \
+	GOOS=linux GOARCH=${GOARCH} go build -ldflags=${LDFLAGS} -o ${BIN_DIR}/${NOISECAT_BIN}-linux-${GOARCH} . ; \
 	cd ${CURRENT_DIR} >/dev/null
 
 darwin_noisecat: deps
 	cd ${NOISECAT_SRC}; \
-	GOOS=darwin GOARCH=${GOARCH} go build -o ${BIN_DIR}/${NOISECAT_BIN}-darwin-${GOARCH} . ; \
+	GOOS=darwin GOARCH=${GOARCH} go build -ldflags=${LDFLAGS} -o ${BIN_DIR}/${NOISECAT_BIN}-darwin-${GOARCH} . ; \
 	cd ${CURRENT_DIR} >/dev/null
 
 windows_noisecat: deps
 	cd ${NOISECAT_SRC}; \
-	GOOS=windows GOARCH=${GOARCH} go build -o ${BIN_DIR}/${NOISECAT_BIN}-windows-${GOARCH}.exe . ; \
+	GOOS=windows GOARCH=${GOARCH} go build -ldflags=${LDFLAGS} -o ${BIN_DIR}/${NOISECAT_BIN}-windows-${GOARCH}.exe . ; \
 	cd ${CURRENT_DIR} >/dev/null
 
 test_noisecat:
@@ -45,17 +47,17 @@ test_noisecat:
 # -- noisesocat --
 linux_noisesocat: deps
 	cd ${NOISESOCAT_SRC}; \
-	GOOS=linux GOARCH=${GOARCH} go build -o ${BIN_DIR}/${NOISESOCAT_BIN}-linux-${GOARCH} . ; \
+	GOOS=linux GOARCH=${GOARCH} go build -ldflags=${LDFLAGS} -o ${BIN_DIR}/${NOISESOCAT_BIN}-linux-${GOARCH} . ; \
 	cd ${CURRENT_DIR} >/dev/null
 
 darwin_noisesocat: deps
 	cd ${NOISESOCAT_SRC}; \
-	GOOS=darwin GOARCH=${GOARCH} go build -o ${BIN_DIR}/${NOISESOCAT_BIN}-darwin-${GOARCH} . ; \
+	GOOS=darwin GOARCH=${GOARCH} go build -ldflags=${LDFLAGS} -o ${BIN_DIR}/${NOISESOCAT_BIN}-darwin-${GOARCH} . ; \
 	cd ${CURRENT_DIR} >/dev/null
 
 windows_noisesocat: deps
 	cd ${NOISESOCAT_SRC}; \
-	GOOS=windows GOARCH=${GOARCH} go build -o ${BIN_DIR}/${NOISESOCAT_BIN}-windows-${GOARCH}.exe . ; \
+	GOOS=windows GOARCH=${GOARCH} go build -ldflags=${LDFLAGS} -o ${BIN_DIR}/${NOISESOCAT_BIN}-windows-${GOARCH}.exe . ; \
 	cd ${CURRENT_DIR} >/dev/null
 
 test_noisesocat:
