@@ -12,7 +12,7 @@ NOISESOCAT_TEST=${CURRENT_DIR}/pkg/noisesocat
 BIN_DIR=${CURRENT_DIR}/bin
 
 # -- generic --
-all: test noisecat noisesocat
+all: noisecat noisesocat
 
 test: test_noisecat test_noisesocat
 noisecat: deps linux_noisecat darwin_noisecat windows_noisecat
@@ -65,6 +65,6 @@ test_noisesocat:
 	
 
 clean:
-	-rm -f ${NOISECAT_BIN}-* ${NOISESOCAT_BIN}-*
+	-rm -rf ${BIN_DIR}
 
 .PHONY: noisecat noisesocat all deps

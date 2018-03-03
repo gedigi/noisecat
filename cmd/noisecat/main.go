@@ -4,16 +4,16 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"reflect"
 
+	"github.com/gedigi/noise"
 	"github.com/gedigi/noisecat/pkg/common"
 	"github.com/gedigi/noisecat/pkg/noisecat"
 )
 
 var version = "1.0"
 
-func parseFlags() noisecat.Configuration {
-	config := noisecat.Configuration{}
+func parseFlags() common.Configuration {
+	config := common.Configuration{}
 
 	flag.Usage = Usage
 	flag.StringVar(&config.ExecuteCmd, "e", "", "Executes the given `command`")
@@ -46,15 +46,21 @@ func main() {
 	var err error
 
 	config := parseFlags()
-	l := common.Log(config.Verbose)
+	l := common.Verbose(config.Verbose)
 
-	if err = config.ParseConfig(); err != nil {
+	noiseConfigInterface, err := config.ParseConfig()
+	if err != nil {
+		l.Fatalf("%s", err)
+	}
+	noiseConfig, ok := noiseConfigInterface.(noise.Config)
+	if !ok {
 		l.Fatalf("%s", err)
 	}
 
 	nc := noisecat.Noisecat{
-		Config: &config,
-		L:      l,
+		Config:      &config,
+		Log:         l,
+		NoiseConfig: &noiseConfig,
 	}
 
 	if config.Keygen {
@@ -91,29 +97,29 @@ func listSupportedProtocols() {
 	fmt.Print("  e.g. Noise_NN_25519_AESGCM_SHA256\n\n")
 
 	fmt.Print("Available handshake patterns:\n")
-	listDetails(noisecat.ProtoInfo{HandshakePatterns: noisecat.HandshakePatterns}, "HandshakePatterns")
+	listDetails(common.PatternStrByte)
 
 	fmt.Print("Available DH functions:\n")
-	listDetails(noisecat.ProtoInfo{DHFuncs: noisecat.DHFuncs}, "DHFuncs")
+	listDetails(common.DHStrByte)
 
 	fmt.Print("Available Cipher functions:\n")
-	listDetails(noisecat.ProtoInfo{CipherFuncs: noisecat.CipherFuncs}, "CipherFuncs")
+	listDetails(common.CipherStrByte)
 
 	fmt.Print("Available Hash functions:\n")
-	listDetails(noisecat.ProtoInfo{HashFuncs: noisecat.HashFuncs}, "HashFuncs")
+	listDetails(common.HashStrByte)
 }
 
-func listDetails(p noisecat.ProtoInfo, field string) {
-	object := reflect.ValueOf(p)
-	objectMap := reflect.Indirect(object).FieldByName(field)
+func listDetails(m map[string]byte) {
+	i := 0
 	fmt.Print(" ")
-	for i, v := range objectMap.MapKeys() {
-		fmt.Printf(" %s", v)
-		if (i+1)%5 == 0 || i == objectMap.Len()-1 {
+	for v := range m {
+		fmt.Print(" ", v)
+		if (i+1)%5 == 0 || i == len(m)-1 {
 			fmt.Print("\n ")
-		} else if i < objectMap.Len()-1 {
+		} else if i < len(m)-1 {
 			fmt.Print(",")
 		}
+		i++
 	}
 	fmt.Println()
 }

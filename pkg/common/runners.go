@@ -13,6 +13,7 @@ type Params struct {
 	Conn       net.Conn
 	Proxy      string
 	ExecuteCmd string
+	Log        Verbose
 }
 
 // Router routes a connection based on provided parameters
@@ -30,7 +31,7 @@ func (c *Params) Router() {
 func (c *Params) proxyConn() {
 	pConn, err := net.Dial("tcp", c.Proxy)
 	if err != nil {
-		l.Fatalf("Can't connect to remote host: %s", err)
+		c.Log.Fatalf("Can't connect to remote host: %s", err)
 	}
 	w, r := pConn, pConn
 	c.handleIO(w, r)
@@ -49,7 +50,7 @@ func (c *Params) executeCmd() {
 	cmd := exec.Command(cmdName, cmdArgs...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = c.Conn, c.Conn, c.Conn
 	if err := cmd.Run(); err != nil {
-		l.Fatalf("Can't execute command: %s", err)
+		c.Log.Fatalf("Can't execute command: %s", err)
 	}
 }
 
@@ -70,6 +71,6 @@ func (c *Params) handleIO(w io.WriteCloser, r io.ReadCloser) {
 
 	for i := 0; i < 2; i++ {
 		s := <-channel
-		l.Verb("%s: %d", s.Dir, s.Bytes)
+		c.Log.Verb("%s: %d", s.Dir, s.Bytes)
 	}
 }

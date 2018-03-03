@@ -13,8 +13,9 @@ import (
 
 // Noisesocat is the main tool structure containing log facility and configuration
 type Noisesocat struct {
-	Config *Configuration
-	L      common.Log
+	Config      *common.Configuration
+	NoiseConfig *noisesocket.ConnectionConfig
+	Log         common.Verbose
 }
 
 var commonParams = new(common.Params)
@@ -22,13 +23,18 @@ var commonParams = new(common.Params)
 // GenerateKeypair generates and outputs private and public keys based on the
 // provided configuration
 func (n *Noisesocat) GenerateKeypair() []byte {
-	keypair, err := keyGenerator()
+	cs := noise.NewCipherSuite(
+		common.DHByteObj[n.NoiseConfig.DHFunc],
+		common.CipherByteObj[n.NoiseConfig.CipherFunc],
+		common.HashByteObj[n.NoiseConfig.HashFunc],
+	)
+	keypair, err := cs.GenerateKeypair(rand.Reader)
 	if err != nil {
-		n.L.Fatalf("Can't geneate keypair")
+		n.Log.Fatalf("Can't geneate keypair")
 	}
 	output, err := json.Marshal(keypair)
 	if err != nil {
-		n.L.Fatalf("Can't convert to json")
+		n.Log.Fatalf("Can't convert to json")
 	}
 	return output
 }
@@ -38,13 +44,13 @@ func (n *Noisesocat) StartClient() {
 	netAddress := net.JoinHostPort(n.Config.DstHost, n.Config.DstPort)
 	localAddress := net.JoinHostPort(n.Config.SrcHost, n.Config.SrcPort)
 
-	conn, err := noisesocket.Dial(netAddress, localAddress, n.Config.NoiseConfig)
+	conn, err := noisesocket.Dial(netAddress, localAddress, n.NoiseConfig)
 	if err != nil {
-		n.L.Fatalf("Can't connect to %s/tcp: %s", netAddress, err)
+		n.Log.Fatalf("Can't connect to %s/tcp: %s", netAddress, err)
 	}
-	n.L.Verb("Connected to %s", conn.RemoteAddr().String())
-	if n.Config.NoiseConfig.StaticKey.Public != nil {
-		n.L.Verb("Local static key: %s", base64.StdEncoding.EncodeToString(n.Config.NoiseConfig.StaticKey.Public))
+	n.Log.Verb("Connected to %s", conn.RemoteAddr().String())
+	if n.NoiseConfig.StaticKeypair.Public != nil {
+		n.Log.Verb("Local static key: %s", base64.StdEncoding.EncodeToString(n.NoiseConfig.StaticKeypair.Public))
 	}
 	commonParams.Proxy = n.Config.Proxy
 	commonParams.ExecuteCmd = n.Config.ExecuteCmd
@@ -56,22 +62,22 @@ func (n *Noisesocat) StartClient() {
 func (n *Noisesocat) StartServer() {
 	netAddress := net.JoinHostPort(n.Config.SrcHost, n.Config.SrcPort)
 
-	listener, err := noisesocket.Listen(netAddress, n.Config.NoiseConfig)
+	listener, err := noisesocket.Listen(netAddress, n.NoiseConfig)
 	if err != nil {
-		n.L.Fatalf("Can't listen: %s", err)
+		n.Log.Fatalf("Can't listen: %s", err)
 	}
 
-	n.L.Verb("Listening on %s/tcp", listener.Addr())
-	if n.Config.NoiseConfig.StaticKey.Public != nil {
-		n.L.Verb("Local static key: %s", base64.StdEncoding.EncodeToString(n.Config.NoiseConfig.StaticKey.Public))
+	n.Log.Verb("Listening on %s/tcp", listener.Addr())
+	if n.NoiseConfig.StaticKeypair.Public != nil {
+		n.Log.Verb("Local static key: %s", base64.StdEncoding.EncodeToString(n.NoiseConfig.StaticKeypair.Public))
 	}
 
 	acceptConnections := func() net.Conn {
 		conn, err := listener.Accept()
 		if err != nil {
-			n.L.Fatalf("Can't accept connection: %s", err)
+			n.Log.Fatalf("Can't accept connection: %s", err)
 		}
-		n.L.Verb("Connection from %s", conn.RemoteAddr().String())
+		n.Log.Verb("Connection from %s", conn.RemoteAddr().String())
 		return conn
 	}
 	commonParams.Proxy = n.Config.Proxy
@@ -86,14 +92,4 @@ func (n *Noisesocat) StartServer() {
 		commonParams.Conn = acceptConnections()
 		commonParams.Router()
 	}
-}
-
-// -- Key Generator
-func keyGenerator() (noise.DHKey, error) {
-	cs := noise.NewCipherSuite(noise.DH25519, noise.CipherAESGCM, noise.HashBLAKE2b)
-	keypair, err := cs.GenerateKeypair(rand.Reader)
-	if err != nil {
-		return noise.DHKey{}, err
-	}
-	return keypair, nil
 }

@@ -4,16 +4,16 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"reflect"
 
 	"github.com/gedigi/noisecat/pkg/common"
 	"github.com/gedigi/noisecat/pkg/noisesocat"
+	"github.com/gedigi/noisesocket"
 )
 
 var version = "1.0"
 
-func parseFlags() noisesocat.Configuration {
-	config := noisesocat.Configuration{}
+func parseFlags() common.Configuration {
+	config := common.Configuration{}
 
 	flag.Usage = noisesocatUsage
 	flag.StringVar(&config.ExecuteCmd, "e", "", "Executes the given `command`")
@@ -26,11 +26,8 @@ func parseFlags() noisesocat.Configuration {
 	flag.StringVar(&config.RStatic, "rstatic", "", "`static key` of the remote peer (32 bytes, base64)")
 	flag.StringVar(&config.LStatic, "lstatic", "", "`file` containing local keypair (use -keygen to generate)")
 	flag.BoolVar(&config.Keygen, "keygen", false, "generates 25519 keypair and prints it to stdout")
-	config.DHFunc = "25519"
-	config.CipherFunc = "ChaChaPoly"
-	config.HashFunc = "BLAKE2b"
-
 	flag.Parse()
+	config.Protocol = "Noise_XX_25510_ChaChaPoly_BLAKE2b"
 	if config.Keygen {
 		return config
 	}
@@ -48,15 +45,21 @@ func main() {
 	var err error
 
 	config := parseFlags()
-	l := common.Log(config.Verbose)
+	l := common.Verbose(config.Verbose)
 
-	if err = config.ParseConfig(); err != nil {
+	noiseConfigInterface, err := config.ParseConfig()
+	if err != nil {
+		l.Fatalf("%s", err)
+	}
+	noiseConfig, ok := noiseConfigInterface.(noisesocket.ConnectionConfig)
+	if !ok {
 		l.Fatalf("%s", err)
 	}
 
 	nc := noisesocat.Noisesocat{
-		Config: &config,
-		L:      l,
+		Config:      &config,
+		Log:         l,
+		NoiseConfig: &noiseConfig,
 	}
 
 	if config.Keygen {
@@ -77,25 +80,12 @@ func noisesocatUsage() {
 	fmt.Printf("\nUsage: %s [options] [address] [port]\n\n", os.Args[0])
 	fmt.Println("Options:")
 	flag.PrintDefaults()
+	fmt.Println("\nThe connection will automatically use:")
+	fmt.Print("  Noise_XX_25519_ChaChaPoly_BLAKE2b (IK if -rstatic)\n\n")
 }
 
 func showBanner() {
 	fmt.Println()
 	fmt.Printf("noisesocat %s\n", version)
 	fmt.Println(" (c) Gerardo Di Giacomo 2018")
-}
-
-func listDetails(p noisesocat.ProtoInfo, field string) {
-	object := reflect.ValueOf(p)
-	objectMap := reflect.Indirect(object).FieldByName(field)
-	fmt.Print(" ")
-	for i, v := range objectMap.MapKeys() {
-		fmt.Printf(" %s", v)
-		if (i+1)%5 == 0 || i == objectMap.Len()-1 {
-			fmt.Print("\n ")
-		} else if i < objectMap.Len()-1 {
-			fmt.Print(",")
-		}
-	}
-	fmt.Println()
 }

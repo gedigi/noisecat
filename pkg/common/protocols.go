@@ -31,7 +31,7 @@ const (
 // DH Funcs
 var DHStrByte = map[string]byte{
 	"25519": NOISE_DH_CURVE25519,
-	"448":   NOISE_DH_CURVE448,
+	// "448":   NOISE_DH_CURVE448,
 }
 
 var DHByteObj = map[byte]noise.DHFunc{
