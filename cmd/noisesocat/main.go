@@ -27,8 +27,8 @@ func parseFlags() noisesocat.Configuration {
 	flag.StringVar(&config.LStatic, "lstatic", "", "`file` containing local keypair (use -keygen to generate)")
 	flag.BoolVar(&config.Keygen, "keygen", false, "generates 25519 keypair and prints it to stdout")
 	config.DHFunc = "25519"
-	config.CipherFunc = "AESGCM"
-	config.HashFunc = "SHA512"
+	config.CipherFunc = "ChaChaPoly"
+	config.HashFunc = "BLAKE2b"
 
 	flag.Parse()
 	if config.Keygen {

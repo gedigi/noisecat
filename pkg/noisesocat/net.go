@@ -4,11 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"io"
 	"net"
-	"os"
-	"os/exec"
-	"strings"
 
 	"github.com/gedigi/noise"
 	"github.com/gedigi/noisecat/pkg/common"
@@ -20,6 +16,8 @@ type Noisesocat struct {
 	Config *Configuration
 	L      common.Log
 }
+
+var commonParams = new(common.Params)
 
 // GenerateKeypair generates and outputs private and public keys based on the
 // provided configuration
@@ -48,7 +46,10 @@ func (n *Noisesocat) StartClient() {
 	if n.Config.NoiseConfig.StaticKey.Public != nil {
 		n.L.Verb("Local static key: %s", base64.StdEncoding.EncodeToString(n.Config.NoiseConfig.StaticKey.Public))
 	}
-	n.router(conn)
+	commonParams.Proxy = n.Config.Proxy
+	commonParams.ExecuteCmd = n.Config.ExecuteCmd
+	commonParams.Conn = conn
+	commonParams.Router()
 }
 
 // StartServer starts a noisesocat server
@@ -73,74 +74,17 @@ func (n *Noisesocat) StartServer() {
 		n.L.Verb("Connection from %s", conn.RemoteAddr().String())
 		return conn
 	}
+	commonParams.Proxy = n.Config.Proxy
+	commonParams.ExecuteCmd = n.Config.ExecuteCmd
 
 	if n.Config.Daemon {
 		for {
-			go n.router(acceptConnections())
+			commonParams.Conn = acceptConnections()
+			go commonParams.Router()
 		}
 	} else {
-		n.router(acceptConnections())
-	}
-}
-
-// -- Network helper functions
-func (n *Noisesocat) router(conn net.Conn) {
-	var w io.WriteCloser
-	var r io.ReadCloser
-
-	if n.Config.Proxy != "" {
-		pConn, err := net.Dial("tcp", n.Config.Proxy)
-		if err != nil {
-			n.L.Fatalf("Can't connect to remote host: %s", err)
-		}
-		w, r = pConn, pConn
-	} else {
-		r = os.Stdin
-		w = os.Stdout
-	}
-
-	if n.Config.ExecuteCmd != "" {
-		n.executeCmd(conn)
-	} else {
-		n.handleIO(conn, w, r)
-	}
-}
-
-func (n *Noisesocat) executeCmd(conn net.Conn) {
-	defer func() {
-		conn.Close()
-	}()
-	cmdParse := strings.Split(n.Config.ExecuteCmd, " ")
-	cmdName := cmdParse[0]
-	var cmdArgs []string
-	if len(cmdParse[1:]) > 0 {
-		cmdArgs = cmdParse[1:]
-	}
-	cmd := exec.Command(cmdName, cmdArgs...)
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = conn, conn, conn
-	if err := cmd.Run(); err != nil {
-		n.L.Fatalf("Can't execute command: %s", err)
-	}
-}
-
-func (n *Noisesocat) handleIO(conn net.Conn, w io.WriteCloser, r io.ReadCloser) {
-	c := make(chan common.Progress)
-
-	copyIO := func(writer io.WriteCloser, reader io.ReadCloser, dir string) {
-		defer func() {
-			reader.Close()
-			writer.Close()
-		}()
-		numBytes, _ := io.Copy(writer, reader)
-		c <- common.Progress{Bytes: numBytes, Dir: dir}
-	}
-
-	go copyIO(conn, r, "SNT")
-	go copyIO(w, conn, "RCV")
-
-	for i := 0; i < 2; i++ {
-		s := <-c
-		n.L.Verb("%s: %d", s.Dir, s.Bytes)
+		commonParams.Conn = acceptConnections()
+		commonParams.Router()
 	}
 }
 

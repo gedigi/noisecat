@@ -4,7 +4,9 @@
 *.so
 *.dylib
 noisecat-*
-bin/*
+noisesocat-*
+bin
+.idea
 
 # Test binary, build with `go test -c`
 *.test
