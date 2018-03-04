@@ -53,7 +53,7 @@ func (n *NoiseConfig) GetLocalStaticPublic() []byte {
 	return n.StaticKeypair.Public
 }
 
-// Config is a noisesocket configuration variable
+// NoisesocketConfig is a noisesocket configuration variable
 type NoisesocketConfig noisesocket.ConnectionConfig
 
 // GetLocalStaticPublic returns the noisesocket local static key forn
