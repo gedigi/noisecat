@@ -14,7 +14,7 @@ var version = "1.0"
 func parseFlags() noisecat.Configuration {
 	config := noisecat.Configuration{}
 
-	flag.Usage = noisesocatUsage
+	flag.Usage = Usage
 	flag.StringVar(&config.ExecuteCmd, "e", "", "Executes the given `command`")
 	flag.StringVar(&config.Proxy, "proxy", "", "`address:port` combination to forward connections to (-l required)")
 	flag.BoolVar(&config.Listen, "l", false, "listens for incoming connections")
@@ -80,7 +80,7 @@ func main() {
 }
 
 // -- Help/Usage
-func noisesocatUsage() {
+func Usage() {
 	showBanner()
 	fmt.Printf("\nUsage: %s [options] [address] [port]\n\n", os.Args[0])
 	fmt.Println("Options:")
