@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/gedigi/noise"
 	"github.com/gedigi/noisecat/pkg/noisecat"
 )
 
@@ -52,7 +53,7 @@ func main() {
 		l.Fatalf("%s", err)
 	}
 
-	noiseConfig, ok := noiseConfigInterface.(noisecat.Config)
+	noiseConfig, ok := noiseConfigInterface.(*noise.Config)
 	if !ok {
 		l.Fatalf("Couldn't parse Noise configuration")
 	}
@@ -60,7 +61,7 @@ func main() {
 	nc := noisecat.Noisecat{
 		Config:      &config,
 		Log:         l,
-		NoiseConfig: noiseConfig,
+		NoiseConfig: (*noisecat.NoiseConfig)(noiseConfig),
 	}
 
 	if config.Keygen {

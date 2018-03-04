@@ -80,8 +80,7 @@ func (n *Noisecat) StartServer() {
 func connectTo(protocol, netAddress, localAddress string, config interface{}) (net.Conn, error) {
 	noiseConf, ok := config.(*NoiseConfig)
 	if ok {
-		noiseConfigCasted := noise.Config(*noiseConf)
-		noiseConn, err := noise.Dial(protocol, netAddress, localAddress, &noiseConfigCasted)
+		noiseConn, err := noise.Dial(protocol, netAddress, localAddress, (*noise.Config)(noiseConf))
 		if err != nil {
 			return nil, err
 		}
@@ -89,8 +88,7 @@ func connectTo(protocol, netAddress, localAddress string, config interface{}) (n
 	}
 	noisesocketConf, ok := config.(*NoisesocketConfig)
 	if ok {
-		noisesocketConfCasted := noisesocket.ConnectionConfig(*noisesocketConf)
-		noisesocketConn, err := noisesocket.Dial(netAddress, localAddress, &noisesocketConfCasted)
+		noisesocketConn, err := noisesocket.Dial(netAddress, localAddress, (*noisesocket.ConnectionConfig)(noisesocketConf))
 		if err != nil {
 			return nil, err
 		}
@@ -102,8 +100,7 @@ func connectTo(protocol, netAddress, localAddress string, config interface{}) (n
 func listenOn(protocol, netAddress string, config interface{}) (net.Listener, error) {
 	noiseConf, ok := config.(*NoiseConfig)
 	if ok {
-		noiseConfCasted := noise.Config(*noiseConf)
-		noiseListener, err := noise.Listen(protocol, netAddress, &noiseConfCasted)
+		noiseListener, err := noise.Listen(protocol, netAddress, (*noise.Config)(noiseConf))
 		if err != nil {
 			return nil, err
 		}
@@ -111,8 +108,7 @@ func listenOn(protocol, netAddress string, config interface{}) (net.Listener, er
 	}
 	noisesocketConf, ok := config.(*NoisesocketConfig)
 	if ok {
-		noiseoscketConfCasted := noisesocket.ConnectionConfig(*noisesocketConf)
-		noisesocketListener, err := noisesocket.Listen(netAddress, &noiseoscketConfCasted)
+		noisesocketListener, err := noisesocket.Listen(netAddress, (*noisesocket.ConnectionConfig)(noisesocketConf))
 		if err != nil {
 			return nil, err
 		}

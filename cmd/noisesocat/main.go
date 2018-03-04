@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gedigi/noisecat/pkg/common"
 	"github.com/gedigi/noisecat/pkg/noisecat"
+	"github.com/gedigi/noisesocket"
 )
 
 var version = "1.0"
 
-func parseFlags() common.Configuration {
-	config := common.Configuration{}
+func parseFlags() noisecat.Configuration {
+	config := noisecat.Configuration{}
 
 	flag.Usage = noisesocatUsage
 	flag.StringVar(&config.ExecuteCmd, "e", "", "Executes the given `command`")
@@ -45,26 +45,26 @@ func main() {
 	var err error
 
 	config := parseFlags()
-	l := common.Verbose(config.Verbose)
+	l := noisecat.Verbose(config.Verbose)
 
 	noiseConfigInterface, err := config.ParseConfig()
 	if err != nil {
 		l.Fatalf("%s", err)
 	}
 
-	noiseConfig, ok := noiseConfigInterface.(noisecat.Config)
+	noiseConfig, ok := noiseConfigInterface.(*noisesocket.ConnectionConfig)
 	if !ok {
 		l.Fatalf("Couldn't parse Noise configuration")
 	}
 
-	nc := common.Noisecat{
+	nc := noisecat.Noisecat{
 		Config:      &config,
 		Log:         l,
-		NoiseConfig: noiseConfig,
+		NoiseConfig: (*noisecat.NoisesocketConfig)(noiseConfig),
 	}
 
 	if config.Keygen {
-		keypair, err := common.GenerateKeypair(config.DHFunc, config.CipherFunc, config.HashFunc)
+		keypair, err := noisecat.GenerateKeypair(config.DHFunc, config.CipherFunc, config.HashFunc)
 		if err != nil {
 			l.Fatalf("%s", err)
 		}

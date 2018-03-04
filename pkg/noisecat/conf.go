@@ -93,16 +93,22 @@ func (config *Configuration) ParseConfig() (interface{}, error) {
 }
 
 func (config *Configuration) parseNoisesocket() (*noisesocket.ConnectionConfig, error) {
-	_, dh, cipher, hash, err := parseProtocolName(config.Protocol)
+	var err error
+	_, config.DHFunc, config.CipherFunc, config.HashFunc, err = parseProtocolName(config.Protocol)
 	if err != nil {
 		return nil, err
 	}
-	cs := noise.NewCipherSuite(DHByteObj[dh], CipherByteObj[cipher], HashByteObj[hash])
+
+	cs := noise.NewCipherSuite(
+		DHByteObj[config.DHFunc],
+		CipherByteObj[config.CipherFunc],
+		HashByteObj[config.HashFunc],
+	)
 	noiseConf := &noisesocket.ConnectionConfig{
 		IsClient:   !config.Listen,
-		DHFunc:     dh,
-		CipherFunc: cipher,
-		HashFunc:   hash,
+		DHFunc:     config.DHFunc,
+		CipherFunc: config.CipherFunc,
+		HashFunc:   config.HashFunc,
 	}
 	noiseConf.StaticKeypair, err = config.checkLocalKeypair(cs)
 	if err != nil {
@@ -112,15 +118,20 @@ func (config *Configuration) parseNoisesocket() (*noisesocket.ConnectionConfig, 
 }
 
 func (config *Configuration) parseNoise() (*noise.Config, error) {
-	pattern, dh, cipher, hash, err := parseProtocolName(config.Protocol)
+	var err error
+	config.Pattern, config.DHFunc, config.CipherFunc, config.HashFunc, err = parseProtocolName(config.Protocol)
 	if err != nil {
 		return nil, err
 	}
-	cs := noise.NewCipherSuite(DHByteObj[dh], CipherByteObj[cipher], HashByteObj[hash])
+	cs := noise.NewCipherSuite(
+		DHByteObj[config.DHFunc],
+		CipherByteObj[config.CipherFunc],
+		HashByteObj[config.HashFunc],
+	)
 	noiseConf := &noise.Config{
 		CipherSuite: cs,
 		Random:      rand.Reader,
-		Pattern:     PatternByteObj[pattern],
+		Pattern:     PatternByteObj[config.Pattern],
 		Initiator:   !config.Listen,
 	}
 
