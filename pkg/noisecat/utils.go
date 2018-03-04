@@ -3,8 +3,10 @@ package noisecat
 import (
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"log"
 	"os"
+	"regexp"
 
 	"github.com/gedigi/noise"
 )
@@ -48,4 +50,35 @@ func GenerateKeypair(dh, cipher, hash byte) ([]byte, error) {
 		return nil, err
 	}
 	return output, err
+}
+
+func parseProtocolName(protoName string) (byte, byte, byte, byte, error) {
+	var hs, dh, cipher, hash byte
+	var err error
+	var ok bool
+	regEx := regexp.MustCompile(`Noise_(\w{2})_(\w+)_(\w+)_(\w+)`)
+	results := regEx.FindStringSubmatch(protoName)
+	if len(results) == 5 {
+		if hs, ok = PatternStrByte[results[1]]; ok == false {
+			err = errors.New("Invalid handshake pattern")
+			goto exit
+		}
+		if dh, ok = DHStrByte[results[2]]; ok == false {
+			err = errors.New("Invalid DH function")
+			goto exit
+		}
+		if cipher, ok = CipherStrByte[results[3]]; ok == false {
+			err = errors.New("Invalid cipher function")
+			goto exit
+		}
+		if hash, ok = HashStrByte[results[4]]; ok == false {
+			err = errors.New("Invalid hash function")
+			goto exit
+		}
+		err = nil
+	} else {
+		err = errors.New("Invalid protocol name")
+	}
+exit:
+	return hs, dh, cipher, hash, err
 }
