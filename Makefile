@@ -6,9 +6,7 @@ CURRENT_DIR=$(shell pwd)
 NOISECAT_SRC=${CURRENT_DIR}/cmd/noisecat
 NOISESOCAT_SRC=${CURRENT_DIR}/cmd/noisesocat
 
-NOISECAT_TEST=${CURRENT_DIR}/pkg/noisecat
-NOISESOCAT_TEST=${CURRENT_DIR}/pkg/noisesocat
-
+TEST_DIR=${CURRENT_DIR}/pkg/noisecat
 BIN_DIR=${CURRENT_DIR}/bin
 
 LDFLAGS="-s -w"
@@ -16,9 +14,17 @@ LDFLAGS="-s -w"
 # -- generic --
 all: noisecat noisesocat
 
-test: test_noisecat test_noisesocat
 noisecat: deps linux_noisecat darwin_noisecat windows_noisecat
 noisesocat: deps linux_noisesocat darwin_noisesocat windows_noisesocat
+
+linux: deps linux_noisecat linux_noisesocat
+darwin: deps darwin_noisecat darwin_noisecat
+windows: deps windows_noisecat windows_noisesocat
+
+test:
+	cd ${TEST_DIR}; \
+	go test -v
+	cd ${CURRENT_DIR} >/dev/null
 
 deps:
 	go get -u -f github.com/gedigi/noisecat/...
@@ -41,11 +47,6 @@ windows_noisecat: deps
 	GOOS=windows GOARCH=${GOARCH} go build -ldflags=${LDFLAGS} -o ${BIN_DIR}/${NOISECAT_BIN}-windows-${GOARCH}.exe . ; \
 	cd ${CURRENT_DIR} >/dev/null
 
-test_noisecat:
-	cd ${NOISECAT_TEST}; \
-	go test -v
-	cd ${CURRENT_DIR} >/dev/null
-
 # -- noisesocat --
 linux_noisesocat: deps
 	cd ${NOISESOCAT_SRC}; \
@@ -62,13 +63,7 @@ windows_noisesocat: deps
 	GOOS=windows GOARCH=${GOARCH} go build -ldflags=${LDFLAGS} -o ${BIN_DIR}/${NOISESOCAT_BIN}-windows-${GOARCH}.exe . ; \
 	cd ${CURRENT_DIR} >/dev/null
 
-test_noisesocat:
-	cd ${NOISESOCAT_TEST}; \
-	go test -v
-	cd ${CURRENT_DIR} >/dev/null
-	
-
 clean:
 	-rm -rf ${BIN_DIR}
 
-.PHONY: noisecat noisesocat all deps
+.PHONY: noisecat noisesocat all deps test clean
