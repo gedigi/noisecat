@@ -18,7 +18,7 @@ noisecat: deps linux_noisecat darwin_noisecat windows_noisecat
 noisesocat: deps linux_noisesocat darwin_noisesocat windows_noisesocat
 
 linux: deps linux_noisecat linux_noisesocat
-darwin: deps darwin_noisecat darwin_noisecat
+darwin: deps darwin_noisecat darwin_noisesocat
 windows: deps windows_noisecat windows_noisesocat
 
 test:

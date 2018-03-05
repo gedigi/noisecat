@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/gedigi/noise"
-	"github.com/gedigi/noisesocket"
 )
 
 func TestClientServerNoise(t *testing.T) {
@@ -18,9 +17,13 @@ func TestClientServerNoise(t *testing.T) {
 	tmpFileName := tmpFile.Name()
 	tmpFile.Close()
 	os.Remove(tmpFileName)
-	cmd := "touch " + tmpFileName
+	cmd := "/usr/bin/touch " + tmpFileName
 
-	cs := noise.NewCipherSuite(noise.DH25519, noise.CipherAESGCM, noise.HashSHA512)
+	cs := noise.NewCipherSuite(
+		noise.DH25519,
+		noise.CipherAESGCM,
+		noise.HashSHA512,
+	)
 
 	ncClient.Config = &Configuration{
 		SrcPort: "0",
@@ -72,23 +75,24 @@ func TestClientServerNoisesocket(t *testing.T) {
 	tmpFileName := tmpFile.Name()
 	tmpFile.Close()
 	os.Remove(tmpFileName)
-	cmd := "touch " + tmpFileName
+	cmd := "/usr/bin/touch " + tmpFileName
 
 	cs := noise.NewCipherSuite(
-		DHByteObj[NOISE_DH_CURVE25519],
-		CipherByteObj[NOISE_CIPHER_CHACHAPOLY],
-		HashByteObj[NOISE_HASH_BLAKE2b],
+		noise.DH25519,
+		noise.CipherChaChaPoly,
+		noise.HashBLAKE2b,
 	)
 
 	clientKey, _ := cs.GenerateKeypair(rand.Reader)
 	serverKey, _ := cs.GenerateKeypair(rand.Reader)
 
 	ncClient.Config = &Configuration{
-		SrcPort: "0",
-		DstHost: "127.0.0.1",
-		DstPort: "12345",
-		Verbose: true,
-		Listen:  false,
+		SrcPort:    "0",
+		DstHost:    "127.0.0.1",
+		DstPort:    "12346",
+		Verbose:    true,
+		Listen:     false,
+		ExecuteCmd: cmd,
 	}
 	ncClient.NoiseConfig = &NoisesocketConfig{
 		IsClient:      true,
@@ -98,24 +102,23 @@ func TestClientServerNoisesocket(t *testing.T) {
 		StaticKeypair: clientKey,
 	}
 	ncServer.Config = &Configuration{
-		SrcPort:    "12345",
-		SrcHost:    "127.0.0.1",
-		Verbose:    true,
-		Listen:     true,
-		ExecuteCmd: cmd,
+		SrcPort: "12346",
+		SrcHost: "127.0.0.1",
+		Verbose: true,
+		Listen:  true,
 	}
 	ncServer.NoiseConfig = &NoisesocketConfig{
 		IsClient:      false,
-		DHFunc:        noisesocket.NOISE_DH_CURVE25519,
+		DHFunc:        NOISE_DH_CURVE25519,
 		StaticKeypair: serverKey,
 	}
 
 	ncClient.Log, ncServer.Log = true, true
 
 	go ncServer.StartServer()
-	time.Sleep(2 * time.Second)
+	time.Sleep(3 * time.Second)
 	go ncClient.StartClient()
-	time.Sleep(2 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	_, err := os.Stat(tmpFileName)
 	if os.IsNotExist(err) {

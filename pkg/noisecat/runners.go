@@ -19,6 +19,7 @@ type Params struct {
 
 // Router routes a connection based on provided parameters
 func (c *Params) Router() {
+	defer c.Conn.Close()
 
 	if c.Proxy != "" {
 		c.proxyConn()
@@ -38,9 +39,6 @@ func (c *Params) proxyConn() {
 }
 
 func (c *Params) executeCmd() {
-	defer func() {
-		c.Conn.Close()
-	}()
 	cmdParse := strings.Split(c.ExecuteCmd, " ")
 	cmdName := cmdParse[0]
 	var cmdArgs []string
