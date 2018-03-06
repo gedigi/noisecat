@@ -5,12 +5,12 @@ The noise swiss army knife
 
 This repository contains a set of tools that allow to read and write data across network connections using the [Noise Protocol Framework](http://noiseprotocol.org) (and TCP/IP).
 
-- `noisecat` uses the "raw" Noise protocol framework, with some custom assumptions for framing
-- `noisesocat` uses the NoiseSocket protocol, which provides a framing layer on top of Noise
+* `noisecat` uses the "raw" Noise protocol framework, with some custom assumptions for framing
+* `noisesocat` uses the NoiseSocket protocol, which provides a framing layer on top of Noise
 
-The Noise protocol stack is still under development (i.e. the signaling/negotiation language is still being developed), so this repository will host tools related to new developments of the Noise framework, as well as tools to provide additional functionalities with the available protocools.
+The Noise protocol family is still under development (i.e. the signaling/negotiation language is still being developed). This repository will host tools related to new developments of the Noise framework, as well as tools to provide additional features with the available protocools.
 
-Currently `noisecat` and `noisesocat` share the same features. `noisesocat` makes some assumptions for you, so it's a bit more immeidate to use. For instance, `noisesocat` will use `Noise_XX_25519_ChaChaPoly_BLAKE2b` as default, Noise protocol and will use the `IK` handshake pattern if the static key of the remote peer is provided.
+Currently `noisecat` and `noisesocat` share the same features. `noisesocat` makes some assumptions for you, so it's a bit more immeidate to use, but provides less flexibility in the choice of the protocol. For instance, `noisesocat` will use `Noise_XX_25519_ChaChaPoly_BLAKE2b` as default, Noise protocol and will use the `IK` handshake pattern if the static key of the remote peer is provided.
 
 ## Download and build
 Just `git clone` it, `make` it and you'll have `noisecat` and `noisesocat` binaries for macOS, Linux, and Windows.
