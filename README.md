@@ -19,56 +19,6 @@ Just `git clone` it, `make` it and you'll have `noisecat` and `noisesocat` binar
 ### noisecat
 This is how `noisecat -h` looks like:
 
-<<<<<<< HEAD
-    Usage: ./noisecat-darwin-amd64 [options] [address] [port]
-
-    Options:
-    -e command
-            Executes the given command
-    -k	accepts multiple connections (-l && (-e || -proxy) required)
-    -keygen
-            generates 25519 keypair and prints it to stdout
-    -l	listens for incoming connections
-    -lstatic file
-            file containing local keypair (use -keygen to generate)
-    -p port
-            source port to use
-    -proto protocol name
-            protocol name to use (default "Noise_NN_25519_AESGCM_SHA256")
-    -proxy address:port
-            address:port combination to forward connections to (-l required)
-    -psk pre-shared key
-            pre-shared key to use
-    -rstatic static key
-            static key of the remote peer (32 bytes, base64)
-    -s address
-            source address to use
-    -v	more verbose output
-
-    Protocol name format: Noise_PT_DH_CP_HS
-
-    Where:
-    PT: Handshake pattern
-    DH: Diffie-Hellman handshake function
-    CP: Cipher function
-    HS: Hash function
-
-    e.g. Noise_NN_25519_AESGCM_SHA256
-
-    Available handshake patterns:
-    NN, KK, IN, XK, IK
-    IX, KN, NK, NX, KX
-    XN, XX
-    
-    Available DH functions:
-    25519
-    
-    Available Cipher functions:
-    AESGCM, ChaChaPoly
-    
-    Available Hash functions:
-    SHA256, SHA512, BLAKE2b, BLAKE2s
-=======
 ```
 Usage: noisecat [options] [address] [port]
 
@@ -119,7 +69,6 @@ Available Cipher functions:
 Available Hash functions:
   BLAKE2b, SHA256, SHA512, BLAKE2s
 ```
->>>>>>> dev
 
 The flags are similar to the traditional netcat. In short:
 * `-l -p 31337` listens on port 31337/tcp
