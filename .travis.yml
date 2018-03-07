@@ -2,7 +2,7 @@ language: go
 notifications:
   email: false
 before_script:
-  - go get github.com/gedigi/noise/...
+  - make deps
 script:
   - make clean
   - make test
