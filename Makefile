@@ -20,6 +20,7 @@ noisesocat: deps linux_noisesocat darwin_noisesocat windows_noisesocat
 linux: deps linux_noisecat linux_noisesocat
 darwin: deps darwin_noisecat darwin_noisesocat
 windows: deps windows_noisecat windows_noisesocat
+freebsd: deps freebsd_noisecat freebsd_noisesocat
 
 test:
 	cd ${TEST_DIR}; \
@@ -47,6 +48,11 @@ windows_noisecat: deps
 	GOOS=windows GOARCH=${GOARCH} go build -ldflags=${LDFLAGS} -o ${BIN_DIR}/${NOISECAT_BIN}-windows-${GOARCH}.exe . ; \
 	cd ${CURRENT_DIR} >/dev/null
 
+freebsd_noisecat: deps
+	cd ${NOISECAT_SRC}; \
+	GOOS=freebsd GOARCH=${GOARCH} go build -ldflags=${LDFLAGS} -o ${BIN_DIR}/${NOISECAT_BIN}-freebsd-${GOARCH} . ; \
+	cd ${CURRENT_DIR} >/dev/null
+
 # -- noisesocat --
 linux_noisesocat: deps
 	cd ${NOISESOCAT_SRC}; \
@@ -61,6 +67,11 @@ darwin_noisesocat: deps
 windows_noisesocat: deps
 	cd ${NOISESOCAT_SRC}; \
 	GOOS=windows GOARCH=${GOARCH} go build -ldflags=${LDFLAGS} -o ${BIN_DIR}/${NOISESOCAT_BIN}-windows-${GOARCH}.exe . ; \
+	cd ${CURRENT_DIR} >/dev/null
+
+freebsd_noisesocat: deps
+	cd ${NOISESOCAT_SRC}; \
+	GOOS=freebsd GOARCH=${GOARCH} go build -ldflags=${LDFLAGS} -o ${BIN_DIR}/${NOISESOCAT_BIN}-freebsd-${GOARCH} . ; \
 	cd ${CURRENT_DIR} >/dev/null
 
 clean:
