@@ -15,13 +15,13 @@ func parseFlags() noisecat.Config {
 
 	flag.Usage = usage
 	flag.StringVar(&config.ExecuteCmd, "e", "", "executes the given `command`")
-	flag.StringVar(&config.Proxy, "proxy", "", "forwards packets to `address:port`(-l required)")
+	flag.StringVar(&config.Proxy, "proxy", "", "forwards packets to `address:port` (-l required)")
 	flag.BoolVar(&config.Listen, "l", false, "listens for incoming connections")
 	flag.BoolVar(&config.Verbose, "v", false, "prints verbose output")
 	flag.BoolVar(&config.Daemon, "k", false, "accepts multiple connections (-l && (-e || -proxy) required)")
 	flag.StringVar(&config.SrcPort, "p", "0", "uses source `port`")
 	flag.StringVar(&config.SrcHost, "s", "", "uses source `address`")
-	flag.StringVar(&config.Protocol, "proto", "Noise_NN_25519_AESGCM_SHA256", "`protocol name` to use")
+	flag.StringVar(&config.Protocol, "proto", "Noise_NN_25519_AESGCM_SHA256", "sets `protocol name`")
 	flag.StringVar(&config.PSK, "psk", "", "uses `pre-shared key` in handshake")
 	flag.StringVar(&config.RStatic, "rstatic", "", "defines remote `static key` (32 bytes, base64)")
 	flag.StringVar(&config.LStatic, "lstatic", "", "loads local keypair from `file` (use -keygen to generate)")

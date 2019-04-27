@@ -18,26 +18,26 @@ Usage: noisecat [options] [address] [port]
 
 Options:
   -e command
-    	Executes the given command
+    	executes the given command
   -k	accepts multiple connections (-l && (-e || -proxy) required)
   -keygen
     	generates "-proto" appropriate keypair and prints it to stdout
   -l	listens for incoming connections
   -lstatic file
-    	file containing local keypair (use -keygen to generate)
+    	loads local keypair from file (use -keygen to generate)
   -p port
-    	source port to use (default "0")
+    	uses source port (default "0")
   -proto protocol name
-    	protocol name to use (default "Noise_NN_25519_AESGCM_SHA256")
+    	sets protocol name (default "Noise_NN_25519_AESGCM_SHA256")
   -proxy address:port
-    	address:port combination to forward connections to (-l required)
+    	forwards packets to address:port (-l required)
   -psk pre-shared key
-    	pre-shared key to use
+    	uses pre-shared key in handshake
   -rstatic static key
-    	static key of the remote peer (32 bytes, base64)
+    	defines remote static key (32 bytes, base64)
   -s address
-    	source address to use
-  -v	more verbose output
+    	uses source address
+  -v	prints verbose output
 
 Protocol name format: Noise_PT_DH_CP_HS
 
