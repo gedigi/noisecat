@@ -26,7 +26,7 @@ Options:
   -lstatic file
     	file containing local keypair (use -keygen to generate)
   -p port
-    	source port to use
+    	source port to use (default "0")
   -proto protocol name
     	protocol name to use (default "Noise_NN_25519_AESGCM_SHA256")
   -proxy address:port
@@ -50,9 +50,9 @@ Where:
   e.g. Noise_NN_25519_AESGCM_SHA256
 
 Available handshake patterns:
-  NN, NL, NX, XN, XX
-  KN, KX, IN, XK, KK
-  IK, IX
+  KK, KX, IX, NL, NX
+  XN, XX, KN, NN, XK
+  IN, IK
  
 Available DH functions:
   25519
@@ -61,7 +61,7 @@ Available Cipher functions:
   ChaChaPoly, AESGCM
  
 Available Hash functions:
-  BLAKE2b, SHA256, SHA512, BLAKE2s
+  BLAKE2s, BLAKE2b, SHA256, SHA512
 ```
 
 The flags are similar to the traditional netcat. In short:
