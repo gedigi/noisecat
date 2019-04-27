@@ -6,18 +6,10 @@ import (
 	"encoding/base64"
 	"errors"
 
-	"github.com/gedigi/noise"
+	"github.com/flynn/noise"
 )
 
-// NoiseConfig is a noise configuration variable
-type NoiseConfig noise.Config
-
-// GetLocalStaticPublic returns the noise local static key forn
-func (n *NoiseConfig) GetLocalStaticPublic() []byte {
-	return n.StaticKeypair.Public
-}
-
-func (config *Configuration) parseNoise() (*noise.Config, error) {
+func (config *Config) parseNoise() (*noise.Config, error) {
 	var err error
 	config.Pattern, config.DHFunc, config.CipherFunc, config.HashFunc, err = parseProtocolName(config.Protocol)
 	if err != nil {

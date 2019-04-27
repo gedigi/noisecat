@@ -3,17 +3,11 @@ The noise swiss army knife
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/gedigi/noisecat)](https://goreportcard.com/report/github.com/gedigi/noisecat) [![Build Status](https://travis-ci.org/gedigi/noisecat.svg?branch=master)](https://travis-ci.org/gedigi/noisecat)
 
-This repository contains a set of tools that allow to read and write data across network connections using the [Noise Protocol Framework](http://noiseprotocol.org) (and TCP/IP).
+noisecat :smirk_cat: is a featured networking utility which reads and writes data across network connections, using the Noise Protocol Framework (and TCP/IP).
 
-* `noisecat` uses the "raw" Noise protocol framework, with some custom assumptions for framing
-* `noisesocat` uses the NoiseSocket protocol, which provides a framing layer on top of Noise
-
-The Noise protocol family is still under development (i.e. the signaling/negotiation language is still being developed). This repository will host tools related to new developments of the Noise framework, as well as tools to provide additional features with the available protocools.
-
-Currently `noisecat` and `noisesocat` share the same features. `noisesocat` makes some assumptions for you, so it's a bit more immeidate to use, but provides less flexibility in the choice of the protocol. For instance, `noisesocat` will use `Noise_XX_25519_ChaChaPoly_BLAKE2b` as default, Noise protocol and will use the `IK` handshake pattern if the static key of the remote peer is provided.
 
 ## Download and build
-Just `git clone` it, `make` it and you'll have `noisecat` and `noisesocat` binaries for macOS, Linux, and Windows.
+Just `git clone` it, `make` it and you'll have `noisecat` binaries for macOS, Linux, FreeBSD, and Windows.
 
 ## Usage
 ### noisecat
@@ -85,37 +79,6 @@ Other features are:
 * `-proxy` allows to create a tunnel `client -noise-> server -tcp-> final endpoint`
 * `-k` accepts multiple connections (like ncat)
 * `-keygen` generates a pair of keys that, when saved to a file, can be used with the `-lstatic` flag
-
-### noisesocat
-`noisesocat -h` looks very similar as `noisecat`'s, as they share the same features:
-
-```
-Usage: noisesocat [options] [address] [port]
-
-Options:
-  -e command
-    	Executes the given command
-  -k	accepts multiple connections (-l && (-e || -proxy) required)
-  -keygen
-    	generates 25519 keypair and prints it to stdout
-  -l	listens for incoming connections
-  -lstatic file
-    	file containing local keypair (use -keygen to generate)
-  -p port
-    	source port to use
-  -proxy address:port
-    	address:port combination to forward connections to (-l required)
-  -rstatic static key
-    	static key of the remote peer (32 bytes, base64)
-  -s address
-    	source address to use
-  -v	more verbose output
-
-The connection will automatically use:
-  Noise_XX_25519_ChaChaPoly_BLAKE2b (IK if -rstatic)
-```
-
-As you can see, there is no `-proto` flag. Everything else is the same.
 
 ## TODO
 - [x] write some tests

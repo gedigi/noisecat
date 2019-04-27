@@ -1,6 +1,6 @@
 package noisecat
 
-import "github.com/gedigi/noise"
+import "github.com/flynn/noise"
 
 const (
 	NOISE_DH_CURVE25519 = 1

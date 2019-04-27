@@ -5,40 +5,37 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gedigi/noise"
 	"github.com/gedigi/noisecat/pkg/noisecat"
 )
 
 var version = "1.0"
 
-func parseFlags() noisecat.Configuration {
-	config := noisecat.Configuration{}
+func parseFlags() noisecat.Config {
+	config := noisecat.Config{}
 
 	flag.Usage = usage
-	flag.StringVar(&config.ExecuteCmd, "e", "", "Executes the given `command`")
-	flag.StringVar(&config.Proxy, "proxy", "", "`address:port` combination to forward connections to (-l required)")
+	flag.StringVar(&config.ExecuteCmd, "e", "", "executes the given `command`")
+	flag.StringVar(&config.Proxy, "proxy", "", "forwards packets to `address:port`(-l required)")
 	flag.BoolVar(&config.Listen, "l", false, "listens for incoming connections")
-	flag.BoolVar(&config.Verbose, "v", false, "more verbose output")
+	flag.BoolVar(&config.Verbose, "v", false, "prints verbose output")
 	flag.BoolVar(&config.Daemon, "k", false, "accepts multiple connections (-l && (-e || -proxy) required)")
-	flag.StringVar(&config.SrcPort, "p", "0", "source `port` to use")
-	flag.StringVar(&config.SrcHost, "s", "", "source `address` to use")
+	flag.StringVar(&config.SrcPort, "p", "0", "uses source `port`")
+	flag.StringVar(&config.SrcHost, "s", "", "uses source `address`")
 	flag.StringVar(&config.Protocol, "proto", "Noise_NN_25519_AESGCM_SHA256", "`protocol name` to use")
-	flag.StringVar(&config.PSK, "psk", "", "`pre-shared key` to use")
-	flag.StringVar(&config.RStatic, "rstatic", "", "`static key` of the remote peer (32 bytes, base64)")
-	flag.StringVar(&config.LStatic, "lstatic", "", "`file` containing local keypair (use -keygen to generate)")
+	flag.StringVar(&config.PSK, "psk", "", "uses `pre-shared key` in handshake")
+	flag.StringVar(&config.RStatic, "rstatic", "", "defines remote `static key` (32 bytes, base64)")
+	flag.StringVar(&config.LStatic, "lstatic", "", "loads local keypair from `file` (use -keygen to generate)")
 	flag.BoolVar(&config.Keygen, "keygen", false, "generates \"-proto\" appropriate keypair and prints it to stdout")
 	flag.Parse()
-	config.Framework = "noise"
 	if config.Keygen {
 		return config
 	}
 	if !config.Listen && flag.NArg() != 2 {
 		flag.Usage()
 		os.Exit(-1)
-	} else {
-		config.DstHost = flag.Arg(0)
-		config.DstPort = flag.Arg(1)
 	}
+	config.DstHost = flag.Arg(0)
+	config.DstPort = flag.Arg(1)
 	return config
 }
 
@@ -48,20 +45,15 @@ func main() {
 	config := parseFlags()
 	l := noisecat.Verbose(config.Verbose)
 
-	noiseConfigInterface, err := config.ParseConfig()
+	noiseConfig, err := config.ParseConfig()
 	if err != nil {
 		l.Fatalf("%s", err)
-	}
-
-	noiseConfig, ok := noiseConfigInterface.(*noise.Config)
-	if !ok {
-		l.Fatalf("Couldn't parse Noise configuration")
 	}
 
 	nc := noisecat.Noisecat{
 		Config:      &config,
 		Log:         l,
-		NoiseConfig: (*noisecat.NoiseConfig)(noiseConfig),
+		NoiseConfig: noiseConfig,
 	}
 
 	if config.Keygen {

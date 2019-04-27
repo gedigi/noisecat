@@ -6,11 +6,11 @@ import (
 	"errors"
 	"io/ioutil"
 
-	"github.com/gedigi/noise"
+	"github.com/flynn/noise"
 )
 
-// Configuration parameters
-type Configuration struct {
+// Config parameters
+type Config struct {
 	SrcPort string
 	SrcHost string
 	DstPort string
@@ -32,18 +32,15 @@ type Configuration struct {
 	PSK     string
 	RStatic string
 	LStatic string
-
-	Framework string
 }
 
-// NoiseInterface intrfaces with noise or noisesocket configurations
+// NoiseInterface intrfaces with noise configurations
 type NoiseInterface interface {
 	GetLocalStaticPublic() []byte
 }
 
 // ParseConfig parses a configuration struct for setup and correctness
-func (config *Configuration) ParseConfig() (interface{}, error) {
-	var err error
+func (config *Config) ParseConfig() (*noise.Config, error) {
 
 	if config.Daemon {
 		if !config.Listen {
@@ -57,22 +54,10 @@ func (config *Configuration) ParseConfig() (interface{}, error) {
 		return nil, errors.New("Client mode doesn't support -proxy")
 	}
 
-	var noiseConf interface{}
-	if config.Framework == "noise" {
-		noiseConf, err = config.parseNoise()
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		noiseConf, err = config.parseNoisesocket()
-		if err != nil {
-			return nil, err
-		}
-	}
-	return noiseConf, nil
+	return config.parseNoise()
 }
 
-func (config *Configuration) checkLocalKeypair(cs noise.CipherSuite) (noise.DHKey, error) {
+func (config *Config) checkLocalKeypair(cs noise.CipherSuite) (noise.DHKey, error) {
 	var keypair noise.DHKey
 	if config.LStatic != "" {
 		k, err := ioutil.ReadFile(config.LStatic)
@@ -85,9 +70,5 @@ func (config *Configuration) checkLocalKeypair(cs noise.CipherSuite) (noise.DHKe
 		}
 		return keypair, nil
 	}
-	keypair, err := cs.GenerateKeypair(rand.Reader)
-	if err != nil {
-		return noise.DHKey{}, errors.New("Can't generate keys")
-	}
-	return keypair, nil
+	return cs.GenerateKeypair(rand.Reader)
 }
