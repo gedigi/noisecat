@@ -69,7 +69,6 @@ The flags are similar to the traditional netcat. In short:
 * `-e /bin/sh` executes /bin/sh (reverse shell anyone?)
 
 The main difference is the Noise Protocol-related flags:
-* `-keygen` allows you to pre-generate a static keypair
 * `-proto` sets the Noise Protocol name that you want to use
 * `-psk` sets a pre-shared key, known to both client and server, used to authenticate a handshake
 * `-rstatic` specifies the remote peer static (public) key, used in "K"-type handshakes
