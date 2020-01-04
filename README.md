@@ -10,7 +10,6 @@ noisecat :smirk_cat: is a featured networking utility which reads and writes dat
 Just `git clone` it, `make` it and you'll have `noisecat` binaries for macOS, Linux, FreeBSD, and Windows.
 
 ## Usage
-### noisecat
 This is how `noisecat -h` looks like:
 
 ```
@@ -79,8 +78,22 @@ Other features are:
 * `-k` accepts multiple connections (like ncat)
 * `-keygen` generates a pair of keys that, when saved to a file, can be used with the `-lstatic` flag
 
+### Example
+To bind a shell on port 444/tcp (default protocol) and accept multiple clients:
+
+```bash
+$ noisecat -k -e /bin/sh -l -p 4444
+```
+
+To connect to that shell:
+```bash
+$ noisecat <ip> 4444
+```
+
+That's it!
+
 ## TODO
-- [x] write some tests
+- [ ] write some tests
 - [x] add Makefile
 - [ ] add a static key validator helper function
 - [ ] add new features (suggestions are welcome, pull requests too!)
