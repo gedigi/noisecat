@@ -53,21 +53,18 @@ func parseProtocolName(protoName string) (hs byte, dh byte, cipher byte, hash by
 	if len(results) == 5 {
 		if hs, ok = PatternStrByte[results[1]]; ok == false {
 			err = errors.New("Invalid handshake pattern")
-			return
 		}
 		if dh, ok = DHStrByte[results[2]]; ok == false {
 			err = errors.New("Invalid DH function")
-			return
 		}
 		if cipher, ok = CipherStrByte[results[3]]; ok == false {
 			err = errors.New("Invalid cipher function")
-			return
 		}
 		if hash, ok = HashStrByte[results[4]]; ok == false {
 			err = errors.New("Invalid hash function")
-			return
 		}
+	} else {
+		err = errors.New("Invalid protocol name")
 	}
-	err = errors.New("Invalid protocol name")
 	return
 }
