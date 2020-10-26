@@ -79,7 +79,7 @@ Other features are:
 * `-keygen` generates a pair of keys that, when saved to a file, can be used with the `-lstatic` flag
 
 ### Example
-To bind a shell on port 444/tcp (default protocol) and accept multiple clients:
+To bind a shell on port 4444/tcp (default protocol) and accept multiple clients:
 
 ```bash
 $ noisecat -k -e /bin/sh -l -p 4444
