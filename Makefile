@@ -1,54 +1,36 @@
-NOISECAT_BIN = noisecat
-GOARCH = amd64
+NOISECAT_BIN := noisecat
+GOARCH := amd64
 
-CURRENT_DIR=$(shell pwd)
-NOISECAT_SRC=${CURRENT_DIR}/cmd/noisecat
+CURRENT_DIR := $(shell pwd)
+NOISECAT_SRC := $(CURRENT_DIR)/cmd/noisecat
+BIN_DIR := $(CURRENT_DIR)/bin
 
-TEST_DIR=${CURRENT_DIR}/pkg/noisecat
-BIN_DIR=${CURRENT_DIR}/bin
+LDFLAGS := -s -w
 
-LDFLAGS="-s -w"
+PLATFORMS := linux darwin windows freebsd
 
-# -- generic --
-all: noisecat
+.PHONY: all test vet lint clean $(PLATFORMS)
 
-noisecat: deps linux_noisecat darwin_noisecat windows_noisecat
-
-linux: deps linux_noisecat
-darwin: deps darwin_noisecat
-windows: deps windows_noisecat
-freebsd: deps freebsd_noisecat
+all: $(PLATFORMS)
 
 test:
-	cd ${TEST_DIR}; \
-	go test -v
-	cd ${CURRENT_DIR} >/dev/null
+	go test -race -coverprofile=coverage.out ./...
 
-deps:
-	go get -u -f github.com/gedigi/noisecat/...
+vet:
+	go vet ./...
 
-# -- noisecat --
-linux_noisecat: deps
-	cd ${NOISECAT_SRC}; \
-	GOOS=linux GOARCH=${GOARCH} go build -ldflags=${LDFLAGS} -o ${BIN_DIR}/${NOISECAT_BIN}-linux-${GOARCH} . ; \
-	cd ${CURRENT_DIR} >/dev/null
+lint:
+	golangci-lint run
 
-darwin_noisecat: deps
-	cd ${NOISECAT_SRC}; \
-	GOOS=darwin GOARCH=${GOARCH} go build -ldflags=${LDFLAGS} -o ${BIN_DIR}/${NOISECAT_BIN}-darwin-${GOARCH} . ; \
-	cd ${CURRENT_DIR} >/dev/null
+linux darwin freebsd:
+	mkdir -p $(BIN_DIR)
+	GOOS=$@ GOARCH=$(GOARCH) go build -ldflags="$(LDFLAGS)" \
+		-o $(BIN_DIR)/$(NOISECAT_BIN)-$@-$(GOARCH) $(NOISECAT_SRC)
 
-windows_noisecat: deps
-	cd ${NOISECAT_SRC}; \
-	GOOS=windows GOARCH=${GOARCH} go build -ldflags=${LDFLAGS} -o ${BIN_DIR}/${NOISECAT_BIN}-windows-${GOARCH}.exe . ; \
-	cd ${CURRENT_DIR} >/dev/null
-
-freebsd_noisecat: deps
-	cd ${NOISECAT_SRC}; \
-	GOOS=freebsd GOARCH=${GOARCH} go build -ldflags=${LDFLAGS} -o ${BIN_DIR}/${NOISECAT_BIN}-freebsd-${GOARCH} . ; \
-	cd ${CURRENT_DIR} >/dev/null
+windows:
+	mkdir -p $(BIN_DIR)
+	GOOS=windows GOARCH=$(GOARCH) go build -ldflags="$(LDFLAGS)" \
+		-o $(BIN_DIR)/$(NOISECAT_BIN)-windows-$(GOARCH).exe $(NOISECAT_SRC)
 
 clean:
-	-rm -rf ${BIN_DIR}
-
-.PHONY: all clean deps linux darwin windows test clean noisecat
+	rm -rf $(BIN_DIR) coverage.out
