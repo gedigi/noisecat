@@ -24,8 +24,16 @@ type Noisecat struct {
 }
 
 // resolveTransport selects a Transport implementation based on the
-// noisecat Config. An empty / "raw" Transport field defaults to the
-// historical framing.
+// noisecat Config and validates that the chosen transport is
+// compatible with the Noise protocol's DH function. An empty / "raw"
+// Transport field defaults to the historical framing.
+//
+// Compatibility rules:
+//   - bolt8 only speaks Noise_XK_secp256k1_ChaChaPoly_SHA256, so it
+//     requires DHFunc == NOISE_DH_SECP256K1.
+//   - raw and noisesocket sit on top of flynn/noise's DH primitives
+//     and therefore cannot accept secp256k1 (which BOLT-8 implements
+//     directly, outside flynn/noise).
 func resolveTransport(cfg *Config) (transport.Transport, error) {
 	name := cfg.Transport
 	if name == "" {
@@ -33,10 +41,19 @@ func resolveTransport(cfg *Config) (transport.Transport, error) {
 	}
 	switch name {
 	case "raw":
+		if cfg.DHFunc == NOISE_DH_SECP256K1 {
+			return nil, fmt.Errorf("transport=raw cannot speak secp256k1; use -transport bolt8")
+		}
 		return raw.New(), nil
 	case "noisesocket":
+		if cfg.DHFunc == NOISE_DH_SECP256K1 {
+			return nil, fmt.Errorf("transport=noisesocket cannot speak secp256k1; use -transport bolt8")
+		}
 		return noisesocket.New(), nil
 	case "bolt8":
+		if cfg.DHFunc != NOISE_DH_SECP256K1 {
+			return nil, fmt.Errorf("transport=bolt8 only supports secp256k1; the chosen DH function is not")
+		}
 		return bolt8.New(), nil
 	default:
 		return nil, fmt.Errorf("unknown transport %q (expected: raw, noisesocket, bolt8)", name)
