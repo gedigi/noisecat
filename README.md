@@ -69,7 +69,7 @@ The flags are similar to the traditional netcat. In short:
 
 The main difference is the Noise Protocol-related flags:
 * `-proto` sets the Noise Protocol name that you want to use
-* `-psk` sets a pre-shared key — **base64-encoded 32 bytes** (e.g. the output of `head -c 32 /dev/urandom | base64`). PSK only takes effect with PSK-modified Noise patterns.
+* `-psk` sets a pre-shared key — **base64-encoded 32 bytes** (e.g. the output of `head -c 32 /dev/urandom | base64`). Pair it with a psk-modified protocol name, e.g. `-proto Noise_NNpsk0_25519_AESGCM_SHA256` for "PSK before the first message" or `-proto Noise_NKpsk2_25519_AESGCM_SHA256` for "PSK after act 2". The `psk[0-3]` modifier selects which message the PSK token attaches to per the [Noise spec §9.2](https://noiseprotocol.org/noise.html#pre-shared-symmetric-keys). Passing `-psk` without a psk modifier (or vice versa) is now rejected.
 * `-rstatic` specifies the remote peer static (public) key — base64-encoded 32 bytes — used in "K"-type handshakes
 * `-lstatic` specifies the local file where to load static keys from (recommend `chmod 600` on the file)
 
@@ -158,12 +158,3 @@ make linux darwin windows freebsd   # cross-compile
 ```
 
 CI runs build/vet/test on Linux, macOS, and Windows; lint via `golangci-lint`; and `govulncheck` for known CVEs on every push and PR. Tagging `vX.Y.Z` triggers a `goreleaser` build that publishes signed binaries and checksums to the corresponding GitHub Release.
-
-## TODO
-- [x] write some tests
-- [x] add Makefile
-- [x] expose Lightning's BOLT-8 transport (Noise_XK_secp256k1_ChaChaPoly_SHA256)
-- [x] expose the NoiseSocket transport
-- [x] add a static key validator helper function
-- [ ] expose PSK-modified Noise patterns
-- [ ] add new features (suggestions are welcome, pull requests too!)

@@ -11,7 +11,7 @@ import (
 
 func (config *Config) parseNoise() (*noise.Config, error) {
 	var err error
-	config.Pattern, config.DHFunc, config.CipherFunc, config.HashFunc, err = parseProtocolName(config.Protocol)
+	config.Pattern, config.DHFunc, config.CipherFunc, config.HashFunc, config.PSKPlacement, err = parseProtocolName(config.Protocol)
 	if err != nil {
 		return nil, err
 	}
@@ -66,6 +66,9 @@ func (config *Config) parseNoise() (*noise.Config, error) {
 	}
 
 	if config.PSK != "" {
+		if config.PSKPlacement == noPSK {
+			return nil, errors.New("-psk set but protocol has no psk modifier — use e.g. Noise_NKpsk2_25519_AESGCM_SHA256")
+		}
 		psk, err := base64.StdEncoding.DecodeString(config.PSK)
 		if err != nil {
 			return nil, errors.New("invalid PSK: must be base64-encoded")
@@ -74,6 +77,9 @@ func (config *Config) parseNoise() (*noise.Config, error) {
 			return nil, errors.New("PSK must decode to 32 bytes")
 		}
 		noiseConf.PresharedKey = psk
+		noiseConf.PresharedKeyPlacement = int(config.PSKPlacement)
+	} else if config.PSKPlacement != noPSK {
+		return nil, fmt.Errorf("protocol %s has a psk modifier but -psk was not provided", config.Protocol)
 	}
 
 	checkRemoteStatic := func() error {
