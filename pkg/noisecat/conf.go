@@ -36,6 +36,16 @@ type Config struct {
 	PSK     string
 	RStatic string
 	LStatic string
+
+	// Transport selects the wire-framing layer: "raw" (default),
+	// "noisesocket", or — once implemented — "bolt8".
+	Transport string
+	// Prologue is the application-prologue byte sequence mixed into the
+	// handshake hash. NoiseSocket prepends its spec-mandated prefix.
+	Prologue string
+	// NegotiationData is the NoiseSocket-only negotiation_data field sent
+	// with the initiator's first handshake message.
+	NegotiationData string
 }
 
 // NoiseInterface interfaces with noise configurations

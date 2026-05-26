@@ -26,6 +26,9 @@ func parseFlags() noisecat.Config {
 	flag.StringVar(&config.RStatic, "rstatic", "", "defines remote `static key` (32 bytes, base64)")
 	flag.StringVar(&config.LStatic, "lstatic", "", "loads local keypair from `file` (use -keygen to generate)")
 	flag.BoolVar(&config.Keygen, "keygen", false, "generates \"-proto\" appropriate keypair and prints it to stdout")
+	flag.StringVar(&config.Transport, "transport", "raw", "wire `transport`: raw (default) or noisesocket")
+	flag.StringVar(&config.Prologue, "prologue", "", "application `prologue` mixed into the handshake hash")
+	flag.StringVar(&config.NegotiationData, "negotiation", "", "NoiseSocket negotiation_`data` (only used with -transport noisesocket)")
 	flag.Parse()
 	if config.Keygen {
 		return config
