@@ -51,7 +51,7 @@ func TestActVectorsInitiator(t *testing.T) {
 	expectedAct3 := fromHex(t, "00b9e3a702e93e3a9948c2ed6e5fd7590a6e1c3a0344cfc9d5b57357049aa22355361aa02e55a8fc28fef5bd6d71ad0c38228dc68b1c466263b47fdf31e560e139ba")
 
 	rw := &capturingRW{toRead: stubAct2}
-	ck, err := runInitiator(rw, lsPriv, rsPub, ePriv)
+	ck, _, err := runInitiator(rw, lsPriv, rsPub, ePriv)
 	if err != nil {
 		t.Fatalf("runInitiator: %v", err)
 	}
@@ -252,5 +252,56 @@ func TestRekey(t *testing.T) {
 		if !bytes.Equal(got, payload) {
 			t.Fatalf("msg %d: got %q want %q", i, got, payload)
 		}
+	}
+}
+
+// TestFingerprintMatches confirms both peers derive the same handshake
+// hash, which is what makes the value useful for channel binding.
+func TestFingerprintMatches(t *testing.T) {
+	respPriv, _ := secp256k1.GeneratePrivateKey()
+	initPriv, _ := secp256k1.GeneratePrivateKey()
+
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+
+	serverFP := make(chan [32]byte, 1)
+	go func() {
+		raw, err := l.Accept()
+		if err != nil {
+			return
+		}
+		s := Server(raw, respPriv)
+		// Trigger handshake by reading.
+		_ = s.SetReadDeadline(time.Now().Add(2 * time.Second))
+		one := make([]byte, 1)
+		_, _ = s.Read(one)
+		serverFP <- s.Fingerprint()
+		_ = s.Close()
+	}()
+
+	addr := l.Addr().(*net.TCPAddr)
+	raw, err := net.Dial("tcp", "127.0.0.1:"+strconv.Itoa(addr.Port))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := Client(raw, initPriv, respPriv.PubKey())
+	defer c.Close()
+	_ = c.SetDeadline(time.Now().Add(2 * time.Second))
+	if _, err := c.Write([]byte("x")); err != nil {
+		t.Fatal(err)
+	}
+
+	clientFP := c.Fingerprint()
+	server := <-serverFP
+
+	if clientFP != server {
+		t.Fatalf("fingerprint mismatch:\n client: %x\n server: %x", clientFP, server)
+	}
+	var zero [32]byte
+	if clientFP == zero {
+		t.Fatal("fingerprint is zero — handshake didn't complete?")
 	}
 }

@@ -83,6 +83,21 @@ func (c *Conn) CloseWrite() error {
 	return c.conn.Close()
 }
 
+// Fingerprint returns the Noise handshake hash after handshake
+// completion. See the raw transport's docs for usage; both peers
+// compute the same value and it is suitable for channel binding.
+func (c *Conn) Fingerprint() [32]byte {
+	c.handshakeMu.Lock()
+	defer c.handshakeMu.Unlock()
+	var out [32]byte
+	if !c.handshakeDone || c.hs == nil {
+		return out
+	}
+	h := c.hs.ChannelBinding()
+	copy(out[:], h)
+	return out
+}
+
 // Server wraps an existing net.Conn into a NoiseSocket server-side conn.
 // initialNegData and appPrologue are mixed into the handshake hash via
 // the spec's prologue formula.
@@ -199,6 +214,9 @@ func (c *Conn) Write(p []byte) (int, error) {
 
 		ciphertext, err := c.out.Encrypt(nil, nil, plaintext)
 		if err != nil {
+			if errors.Is(err, noise.ErrMaxNonce) {
+				_ = c.conn.Close()
+			}
 			return total, fmt.Errorf("noisesocket: Encrypt: %w", err)
 		}
 		if err := writeLengthPrefixed(c.conn, ciphertext); err != nil {
@@ -235,6 +253,9 @@ func (c *Conn) Read(p []byte) (int, error) {
 	}
 	plaintext, err := c.in.Decrypt(nil, nil, ciphertext)
 	if err != nil {
+		if errors.Is(err, noise.ErrMaxNonce) {
+			_ = c.conn.Close()
+		}
 		return 0, fmt.Errorf("noisesocket: Decrypt: %w", err)
 	}
 	if len(plaintext) < 2 {
