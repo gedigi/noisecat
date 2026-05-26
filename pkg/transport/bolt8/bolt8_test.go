@@ -409,3 +409,142 @@ func (t *tamperingConn) Write(p []byte) (int, error) {
 	}
 	return t.Conn.Write(p)
 }
+
+// TestActVectorsResponder mirrors TestActVectorsInitiator but drives a
+// responder with the same spec inputs and checks the act 2 output and
+// the recovered initiator static key against BOLT-8 Appendix A.
+//
+// Spec inputs (from "Responder Tests"):
+//   ls.priv = 0x2121...21 (32 bytes of 0x21) -> public ec7f7...
+//   e.priv  = 0x2222...22 (32 bytes of 0x22) -> public 466d7...
+//   act 1 in:   0x00 || initiator_eph_pub (036360...) || tag (0df6...)
+//   act 2 out:  0x00 || responder_eph_pub (02466d...) || tag (6e2470...)
+//   act 3 in:   0x00 || encrypted initiator static (b9e3...) || final tag
+//   recovered rs = 0x034f355bdcb7cc...871aa
+func TestActVectorsResponder(t *testing.T) {
+	lsPriv := privFromHex(t, "2121212121212121212121212121212121212121212121212121212121212121")
+	ePriv := privFromHex(t, "2222222222222222222222222222222222222222222222222222222222222222")
+	act1In := fromHex(t, "00036360e856310ce5d294e8be33fc807077dc56ac80d95d9cd4ddbd21325eff73f70df6086551151f58b8afe6c195782c6a")
+	expectedAct2 := fromHex(t, "0002466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f276e2470b93aac583c9ef6eafca3f730ae")
+	act3In := fromHex(t, "00b9e3a702e93e3a9948c2ed6e5fd7590a6e1c3a0344cfc9d5b57357049aa22355361aa02e55a8fc28fef5bd6d71ad0c38228dc68b1c466263b47fdf31e560e139ba")
+	expectedRSHex := "034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa"
+
+	rw := &capturingRW{toRead: append(append([]byte{}, act1In...), act3In...)}
+	ck, _, rs, err := runResponder(rw, lsPriv, ePriv)
+	if err != nil {
+		t.Fatalf("runResponder: %v", err)
+	}
+	if !bytes.Equal(rw.written, expectedAct2) {
+		t.Fatalf("act 2 mismatch\n got: %x\nwant: %x", rw.written, expectedAct2)
+	}
+	gotRS := hex.EncodeToString(rs.SerializeCompressed())
+	if gotRS != expectedRSHex {
+		t.Fatalf("recovered initiator static\n got: %s\nwant: %s", gotRS, expectedRSHex)
+	}
+	// Derived transport keys swap on the responder side per BOLT-8 §3 step 7.
+	wantInitiatorSK := fromHex(t, "969ab31b4d288cedf6218839b27a3e2140827047f2c0f01bf5c04435d43511a9")
+	wantInitiatorRK := fromHex(t, "bb9020b8965f4df047e07f955f3c4b88418984aadc5cdb35096b9ea8fa5c3442")
+	// HKDF on the responder side produces (rk, sk) where rk = initiator's sk
+	// and sk = initiator's rk (the spec swaps them).
+	a, b := hkdfExpand(ck, nil)
+	if !bytes.Equal(a[:], wantInitiatorSK) {
+		t.Fatalf("first HKDF half mismatch\n got: %x\nwant: %x", a[:], wantInitiatorSK)
+	}
+	if !bytes.Equal(b[:], wantInitiatorRK) {
+		t.Fatalf("second HKDF half mismatch\n got: %x\nwant: %x", b[:], wantInitiatorRK)
+	}
+}
+
+// TestRekeyVectors checks message-500 / message-501 byte exactness
+// against BOLT-8 Appendix A — these vectors straddle the rekey
+// boundary (rekey fires when nonce reaches 1000, and each message
+// consumes two nonce slots, so message 501 is the first one encrypted
+// with the rotated key).
+//
+// We seed a Conn with the post-handshake keys from Appendix A and
+// drive 502 writes of the literal payload "hello"; only the 500th
+// and 501st are inspected.
+func TestRekeyVectors(t *testing.T) {
+	sk := *(*[32]byte)(fromHex(t, "969ab31b4d288cedf6218839b27a3e2140827047f2c0f01bf5c04435d43511a9"))
+	ck := *(*[32]byte)(fromHex(t, "919219dbb2920afa8db80f9a51787a840bcf111ed8d588caf9ab4be716e42b01"))
+	wantMsg500 := fromHex(t, "178cb9d7387190fa34db9c2d50027d21793c9bc2d40b1e14dcf30ebeeeb220f48364f7a4c68bf8")
+	wantMsg501 := fromHex(t, "1b186c57d44eb6de4c057c49940d79bb838a145cb528d6e8fd26dbe50a60ca2c104b56b60e45bd")
+
+	a, b := net.Pipe()
+	defer a.Close()
+	defer b.Close()
+
+	c := &Conn{conn: a, isInitiator: true, handshakeDone: true, sk: sk, rk: sk, sck: ck, rck: ck}
+
+	captured := make([][]byte, 502)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 502; i++ {
+			buf := make([]byte, 39) // 18-byte length frame + 5-byte body + 16-byte MAC
+			if _, err := io.ReadFull(b, buf); err != nil {
+				return
+			}
+			captured[i] = append([]byte(nil), buf...)
+		}
+	}()
+
+	for i := 0; i < 502; i++ {
+		if _, err := c.Write([]byte("hello")); err != nil {
+			t.Fatalf("write %d: %v", i, err)
+		}
+	}
+	a.Close()
+	<-done
+
+	if !bytes.Equal(captured[500], wantMsg500) {
+		t.Fatalf("msg 500 mismatch\n got: %x\nwant: %x", captured[500], wantMsg500)
+	}
+	if !bytes.Equal(captured[501], wantMsg501) {
+		t.Fatalf("msg 501 mismatch\n got: %x\nwant: %x", captured[501], wantMsg501)
+	}
+}
+
+// TestRekeyAtMessage1000 picks up where TestRekeyVectors leaves off and
+// confirms the second rekey transition (at nonce 1000 after the first
+// rekey, i.e. cumulative message ~1000/1001 from the start).
+func TestRekeyAtMessage1000(t *testing.T) {
+	sk := *(*[32]byte)(fromHex(t, "969ab31b4d288cedf6218839b27a3e2140827047f2c0f01bf5c04435d43511a9"))
+	ck := *(*[32]byte)(fromHex(t, "919219dbb2920afa8db80f9a51787a840bcf111ed8d588caf9ab4be716e42b01"))
+	wantMsg1000 := fromHex(t, "4a2f3cc3b5e78ddb83dcb426d9863d9d9a723b0337c89dd0b005d89f8d3c05c52b76b29b740f09")
+	wantMsg1001 := fromHex(t, "2ecd8c8a5629d0d02ab457a0fdd0f7b90a192cd46be5ecb6ca570bfc5e268338b1a16cf4ef2d36")
+
+	a, b := net.Pipe()
+	defer a.Close()
+	defer b.Close()
+
+	c := &Conn{conn: a, isInitiator: true, handshakeDone: true, sk: sk, rk: sk, sck: ck, rck: ck}
+
+	captured := make([][]byte, 1002)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 1002; i++ {
+			buf := make([]byte, 39)
+			if _, err := io.ReadFull(b, buf); err != nil {
+				return
+			}
+			captured[i] = append([]byte(nil), buf...)
+		}
+	}()
+
+	for i := 0; i < 1002; i++ {
+		if _, err := c.Write([]byte("hello")); err != nil {
+			t.Fatalf("write %d: %v", i, err)
+		}
+	}
+	a.Close()
+	<-done
+
+	if !bytes.Equal(captured[1000], wantMsg1000) {
+		t.Fatalf("msg 1000 mismatch\n got: %x\nwant: %x", captured[1000], wantMsg1000)
+	}
+	if !bytes.Equal(captured[1001], wantMsg1001) {
+		t.Fatalf("msg 1001 mismatch\n got: %x\nwant: %x", captured[1001], wantMsg1001)
+	}
+}
