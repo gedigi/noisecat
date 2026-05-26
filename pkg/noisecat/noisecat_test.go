@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/flynn/noise"
-	"github.com/gedigi/noisecat/pkg/noisenet"
+	"github.com/gedigi/noisecat/pkg/transport/raw"
 )
 
 // TestClientServerNoiseEcho exercises the full noisecat round-trip without
@@ -39,7 +39,7 @@ func TestClientServerNoiseEcho(t *testing.T) {
 	}
 
 	// Listen on an OS-assigned ephemeral port so concurrent test runs do not collide.
-	listener, err := noisenet.Listen("tcp", "127.0.0.1:0", serverCfg)
+	listener, err := raw.Listen("tcp", "127.0.0.1:0", serverCfg)
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestClientServerNoiseEcho(t *testing.T) {
 
 	// Client: connect, send a payload, read it back.
 	addr := listener.Addr().(*net.TCPAddr)
-	conn, err := noisenet.Dial("tcp", "127.0.0.1:"+strconv.Itoa(addr.Port), "", clientCfg)
+	conn, err := raw.Dial("tcp", "127.0.0.1:"+strconv.Itoa(addr.Port), "", clientCfg)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestDaemonModeHandlesConcurrentConnections(t *testing.T) {
 		Initiator:   false,
 	}
 
-	listener, err := noisenet.Listen("tcp", "127.0.0.1:0", serverCfg)
+	listener, err := raw.Listen("tcp", "127.0.0.1:0", serverCfg)
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestDaemonModeHandlesConcurrentConnections(t *testing.T) {
 				Random:      rand.Reader,
 				Initiator:   true,
 			}
-			conn, err := noisenet.Dial("tcp", "127.0.0.1:"+port, "", clientCfg)
+			conn, err := raw.Dial("tcp", "127.0.0.1:"+port, "", clientCfg)
 			if err != nil {
 				results <- err
 				return

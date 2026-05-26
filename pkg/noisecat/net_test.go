@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/flynn/noise"
-	"github.com/gedigi/noisecat/pkg/noisenet"
+	"github.com/gedigi/noisecat/pkg/transport/raw"
 )
 
 // freePort returns a TCP port that was free at the moment of probing.
@@ -105,7 +105,7 @@ func waitDial(t *testing.T, addr string, d time.Duration) net.Conn {
 	t.Helper()
 	deadline := time.Now().Add(d)
 	for {
-		c, err := noisenet.Dial("tcp", addr, "", nnNoiseConfig(true))
+		c, err := raw.Dial("tcp", addr, "", nnNoiseConfig(true))
 		if err == nil {
 			return c
 		}
