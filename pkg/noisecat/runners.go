@@ -6,9 +6,19 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"sync"
+	"time"
 
 	"github.com/mattn/go-shellwords"
 )
+
+// defaultHandleIOSafetyTimeout bounds how long handleIO will wait for
+// the second copy direction to finish after the first one has
+// half-closed its write side. Prevents an unresponsive backend (or a
+// peer that has half-closed but never gets around to closing its read
+// side) from pinning the goroutine forever. Tests can override per
+// Params via the SafetyTimeout field.
+const defaultHandleIOSafetyTimeout = 30 * time.Second
 
 // Params type defines the parameters required by the runners
 type Params struct {
@@ -16,6 +26,11 @@ type Params struct {
 	Proxy      string
 	ExecuteCmd string
 	Log        Verbose
+
+	// SafetyTimeout overrides the default handleIO half-close safety
+	// timeout. Zero means use defaultHandleIOSafetyTimeout. Only used
+	// by tests; production callers leave it unset.
+	SafetyTimeout time.Duration
 }
 
 // Router routes a connection based on provided parameters
@@ -67,36 +82,81 @@ type progress struct {
 	Err   error
 }
 
+// halfCloseWriter is the subset of net.Conn that supports TCP-style
+// half-close. *net.TCPConn, *noisenet.Conn, and any conn that delegates
+// to a TCPConn satisfy it.
+type halfCloseWriter interface {
+	CloseWrite() error
+}
+
+// signalEndOfWrite tells the destination "we won't write anything else"
+// without closing the read side, so the peer's Read returns EOF while
+// our Read can still drain remaining inbound data. Falls back to full
+// Close for endpoints that lack CloseWrite (notably io.Pipe in tests
+// and os.Stdout in chat mode, where full close is the right thing to
+// do anyway).
+func signalEndOfWrite(dst io.Writer) {
+	if cw, ok := dst.(halfCloseWriter); ok {
+		_ = cw.CloseWrite()
+		return
+	}
+	if closer, ok := dst.(io.Closer); ok {
+		_ = closer.Close()
+	}
+}
+
 func (c *Params) handleIO(w io.Writer, r io.Reader) {
 	ch := make(chan progress, 2)
+	var once sync.Once
+	fullClose := func() {
+		once.Do(func() {
+			_ = c.Conn.Close()
+			var wCloser io.Closer
+			if closer, ok := w.(io.Closer); ok && w != c.Conn {
+				wCloser = closer
+				_ = closer.Close()
+			}
+			if closer, ok := r.(io.Closer); ok && r != c.Conn && io.Closer(closer) != wCloser {
+				_ = closer.Close()
+			}
+		})
+	}
 
 	copyIO := func(dst io.Writer, src io.Reader, dir string) {
 		n, err := io.Copy(dst, src)
-		// Close every endpoint so the other direction's blocking Read/Write
-		// returns and handleIO can exit. Closing the noise conn is mandatory;
-		// closing dst/src (when they're separate Closers, e.g. a proxy conn
-		// or stdin) breaks the case where the peer is silent but the user
-		// (or the backing server) closes their side.
-		_ = c.Conn.Close()
-		if closer, ok := dst.(io.Closer); ok && dst != c.Conn {
-			_ = closer.Close()
-		}
-		if closer, ok := src.(io.Closer); ok && src != c.Conn {
-			_ = closer.Close()
-		}
+		// Half-close the write side so the peer sees EOF on its Read but
+		// the opposite direction's io.Copy can still drain in-flight data.
+		signalEndOfWrite(dst)
 		ch <- progress{Bytes: n, Dir: dir, Err: err}
 	}
 
 	go copyIO(c.Conn, r, "SNT")
 	go copyIO(w, c.Conn, "RCV")
 
-	for i := 0; i < 2; i++ {
-		s := <-ch
-		c.Log.Verb("%s: %d bytes", s.Dir, s.Bytes)
-		if s.Err != nil && !errors.Is(s.Err, io.EOF) && !isClosedNet(s.Err) {
-			c.Log.Verb("%s error: %s", s.Dir, s.Err)
-		}
+	// Wait for the first direction to finish, then start a safety timer
+	// for the second. If the second direction's blocking read does not
+	// return on its own (e.g. a misbehaving backend), the timer fully
+	// closes everything to break the deadlock — preserving the
+	// progress-without-hangs property the previous "close both" version
+	// was protecting against.
+	first := <-ch
+	c.Log.Verb("%s: %d bytes", first.Dir, first.Bytes)
+	if first.Err != nil && !errors.Is(first.Err, io.EOF) && !isClosedNet(first.Err) {
+		c.Log.Verb("%s error: %s", first.Dir, first.Err)
 	}
+
+	timeout := c.SafetyTimeout
+	if timeout <= 0 {
+		timeout = defaultHandleIOSafetyTimeout
+	}
+	timer := time.AfterFunc(timeout, fullClose)
+	second := <-ch
+	timer.Stop()
+	c.Log.Verb("%s: %d bytes", second.Dir, second.Bytes)
+	if second.Err != nil && !errors.Is(second.Err, io.EOF) && !isClosedNet(second.Err) {
+		c.Log.Verb("%s error: %s", second.Dir, second.Err)
+	}
+	fullClose()
 }
 
 func isClosedNet(err error) bool {
