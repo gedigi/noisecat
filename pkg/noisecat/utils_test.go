@@ -56,7 +56,7 @@ func TestParseProtocolName(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			hs, _, _, _, err := parseProtocolName(tc.proto)
+			hs, _, _, _, _, err := parseProtocolName(tc.proto)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("expected error, got nil (hs=%d)", hs)
@@ -77,7 +77,7 @@ func TestParseProtocolName(t *testing.T) {
 }
 
 func TestParseProtocolNameJoinsAllErrors(t *testing.T) {
-	_, _, _, _, err := parseProtocolName("Noise_ZZ_999_FOO_BAR")
+	_, _, _, _, _, err := parseProtocolName("Noise_ZZ_999_FOO_BAR")
 	if err == nil {
 		t.Fatal("expected error")
 	}

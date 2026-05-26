@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"strconv"
 
 	"github.com/flynn/noise"
 )
@@ -44,12 +45,28 @@ func GenerateKeypair(dh, cipher, hash byte) ([]byte, error) {
 	return json.Marshal(keypair)
 }
 
-var protocolRegexp = regexp.MustCompile(`^Noise_(\w+)_(\w+)_(\w+)_(\w+)$`)
+// noPSK is the sentinel value returned by parseProtocolName for protocols
+// without a psk modifier. -1 fits the int8 type used in noise.Config's
+// PresharedKeyPlacement (where 0 is a valid placement index, so a separate
+// "unset" value is needed).
+const noPSK int8 = -1
 
-func parseProtocolName(protoName string) (hs byte, dh byte, cipher byte, hash byte, err error) {
+// protocolRegexp matches Noise protocol names like
+//
+//	Noise_NN_25519_AESGCM_SHA256
+//	Noise_NKpsk2_25519_ChaChaPoly_SHA256
+//	Noise_XX_secp256k1_ChaChaPoly_SHA256
+//
+// The first capture is the 2-letter base pattern; the second is the
+// optional psk-modifier index (psk0, psk1, psk2, or psk3, per the Noise
+// spec); then the DH, cipher, and hash function tokens.
+var protocolRegexp = regexp.MustCompile(`^Noise_([A-Z]{2})(?:psk([0-3]))?_(\w+)_(\w+)_(\w+)$`)
+
+func parseProtocolName(protoName string) (hs byte, dh byte, cipher byte, hash byte, psk int8, err error) {
+	psk = noPSK
 	results := protocolRegexp.FindStringSubmatch(protoName)
-	if len(results) != 5 {
-		err = errors.New("invalid protocol name (expected Noise_PT_DH_CP_HS)")
+	if len(results) != 6 {
+		err = errors.New("invalid protocol name (expected Noise_PT[pskN]_DH_CP_HS)")
 		return
 	}
 	var missing []string
@@ -57,14 +74,19 @@ func parseProtocolName(protoName string) (hs byte, dh byte, cipher byte, hash by
 	if hs, ok = PatternStrByte[results[1]]; !ok {
 		missing = append(missing, "handshake pattern "+results[1])
 	}
-	if dh, ok = DHStrByte[results[2]]; !ok {
-		missing = append(missing, "DH function "+results[2])
+	if results[2] != "" {
+		// regex already constrained to [0-3]; ParseInt cannot fail here.
+		n, _ := strconv.ParseInt(results[2], 10, 8)
+		psk = int8(n) //nolint:gosec // bounded by regex to [0,3]
 	}
-	if cipher, ok = CipherStrByte[results[3]]; !ok {
-		missing = append(missing, "cipher function "+results[3])
+	if dh, ok = DHStrByte[results[3]]; !ok {
+		missing = append(missing, "DH function "+results[3])
 	}
-	if hash, ok = HashStrByte[results[4]]; !ok {
-		missing = append(missing, "hash function "+results[4])
+	if cipher, ok = CipherStrByte[results[4]]; !ok {
+		missing = append(missing, "cipher function "+results[4])
+	}
+	if hash, ok = HashStrByte[results[5]]; !ok {
+		missing = append(missing, "hash function "+results[5])
 	}
 	if len(missing) > 0 {
 		err = fmt.Errorf("unsupported %s", joinList(missing))

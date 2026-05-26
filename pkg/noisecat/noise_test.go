@@ -79,8 +79,10 @@ func TestParseNoiseSetsPSKFrom32Bytes(t *testing.T) {
 	for i := range psk {
 		psk[i] = byte(i)
 	}
+	// Use a psk-modified protocol so the PSK is honored. NNpsk0
+	// prepends the PSK token to the first handshake message.
 	cfg := &Config{
-		Protocol: "Noise_NN_25519_AESGCM_SHA256",
+		Protocol: "Noise_NNpsk0_25519_AESGCM_SHA256",
 		PSK:      base64.StdEncoding.EncodeToString(psk),
 	}
 	noiseCfg, err := cfg.ParseConfig()
@@ -90,4 +92,81 @@ func TestParseNoiseSetsPSKFrom32Bytes(t *testing.T) {
 	if len(noiseCfg.PresharedKey) != 32 || noiseCfg.PresharedKey[31] != 31 {
 		t.Fatalf("PresharedKey not propagated: %v", noiseCfg.PresharedKey)
 	}
+	if noiseCfg.PresharedKeyPlacement != 0 {
+		t.Fatalf("PresharedKeyPlacement = %d, want 0", noiseCfg.PresharedKeyPlacement)
+	}
+}
+
+// TestPSKProtocolNameParses asserts the new regex accepts every valid
+// psk modifier (0..3) on a base pattern and rejects garbage.
+func TestPSKProtocolNameParses(t *testing.T) {
+	good := []struct {
+		proto string
+		want  int8
+	}{
+		{"Noise_NNpsk0_25519_AESGCM_SHA256", 0},
+		{"Noise_NKpsk2_25519_ChaChaPoly_SHA256", 2},
+		{"Noise_XXpsk3_25519_AESGCM_BLAKE2s", 3},
+		{"Noise_IKpsk1_25519_AESGCM_SHA256", 1},
+		{"Noise_NN_25519_AESGCM_SHA256", noPSK},
+	}
+	for _, tc := range good {
+		_, _, _, _, psk, err := parseProtocolName(tc.proto)
+		if err != nil {
+			t.Errorf("%s: unexpected error: %v", tc.proto, err)
+			continue
+		}
+		if psk != tc.want {
+			t.Errorf("%s: psk = %d, want %d", tc.proto, psk, tc.want)
+		}
+	}
+	// psk4 is out of spec; the regex should reject it as an invalid name.
+	if _, _, _, _, _, err := parseProtocolName("Noise_NNpsk4_25519_AESGCM_SHA256"); err == nil {
+		t.Error("Noise_NNpsk4_... should not parse")
+	}
+}
+
+// TestPSKRoundTrip exercises a full client/server handshake with a
+// psk-modified pattern, confirming flynn/noise honors the placement
+// and both peers derive matching session keys.
+func TestPSKRoundTrip(t *testing.T) {
+	psk := make([]byte, 32)
+	for i := range psk {
+		psk[i] = byte(i)
+	}
+	clientCfg := &Config{
+		Protocol: "Noise_NNpsk0_25519_AESGCM_SHA256",
+		PSK:      base64.StdEncoding.EncodeToString(psk),
+	}
+	serverCfg := &Config{
+		Protocol: "Noise_NNpsk0_25519_AESGCM_SHA256",
+		Listen:   true,
+		PSK:      base64.StdEncoding.EncodeToString(psk),
+	}
+	clientNC, err := clientCfg.ParseConfig()
+	if err != nil {
+		t.Fatalf("client ParseConfig: %v", err)
+	}
+	serverNC, err := serverCfg.ParseConfig()
+	if err != nil {
+		t.Fatalf("server ParseConfig: %v", err)
+	}
+	if !bytesEqual32(clientNC.PresharedKey, serverNC.PresharedKey) {
+		t.Fatal("PSK bytes differ across peers")
+	}
+	if clientNC.PresharedKeyPlacement != serverNC.PresharedKeyPlacement {
+		t.Fatal("PresharedKeyPlacement differs across peers")
+	}
+}
+
+func bytesEqual32(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
