@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gedigi/noisecat/pkg/noisenet"
+	"github.com/gedigi/noisecat/pkg/transport/raw"
 )
 
 // TestStartServerDaemonHandlesConcurrentClients is the C1 regression test:
@@ -74,7 +74,7 @@ func TestStartServerDaemonHandlesConcurrentClients(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			payload := []byte("client-" + strconv.Itoa(id))
-			conn, err := noisenet.Dial("tcp", "127.0.0.1:"+port, "", nnNoiseConfig(true))
+			conn, err := raw.Dial("tcp", "127.0.0.1:"+port, "", nnNoiseConfig(true))
 			if err != nil {
 				errs <- err
 				return

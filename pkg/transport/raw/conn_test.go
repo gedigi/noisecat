@@ -1,4 +1,4 @@
-package noisenet
+package raw
 
 import (
 	"bytes"
