@@ -3,6 +3,10 @@ package noisecat
 import (
 	"encoding/base64"
 	"net"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 
 	"github.com/flynn/noise"
 	"github.com/gedigi/noisecat/pkg/noisenet"
@@ -15,8 +19,6 @@ type Noisecat struct {
 	Log         Verbose
 }
 
-var commonParams = new(Params)
-
 // StartClient starts a noisecat client
 func (n *Noisecat) StartClient() {
 	netAddress := net.JoinHostPort(n.Config.DstHost, n.Config.DstPort)
@@ -24,18 +26,13 @@ func (n *Noisecat) StartClient() {
 
 	conn, err := noisenet.Dial("tcp", netAddress, localAddress, n.NoiseConfig)
 	if err != nil {
-		n.Log.Fatalf("Can't connect to %s/tcp: %s", netAddress, err)
+		n.Log.Fatalf("can't connect to %s/tcp: %s", netAddress, err)
 	}
 	n.Log.Verb("Connected to %s", conn.RemoteAddr().String())
-	localPublicKey := n.NoiseConfig.StaticKeypair.Public
-	if localPublicKey != nil {
-		n.Log.Verb("Local static key: %s", base64.StdEncoding.EncodeToString(localPublicKey))
+	if pub := n.NoiseConfig.StaticKeypair.Public; pub != nil {
+		n.Log.Verb("Local static key: %s", base64.StdEncoding.EncodeToString(pub))
 	}
-	commonParams.Proxy = n.Config.Proxy
-	commonParams.ExecuteCmd = n.Config.ExecuteCmd
-	commonParams.Conn = conn
-	commonParams.Log = Verbose(n.Config.Verbose)
-	commonParams.Router()
+	n.newParams(conn).Router()
 }
 
 // StartServer starts a noisecat server
@@ -44,34 +41,59 @@ func (n *Noisecat) StartServer() {
 
 	listener, err := noisenet.Listen("tcp", netAddress, n.NoiseConfig)
 	if err != nil {
-		n.Log.Fatalf("Can't listen: %s", err)
+		n.Log.Fatalf("can't listen: %s", err)
 	}
+	defer listener.Close()
 
 	n.Log.Verb("Listening on %s/tcp", listener.Addr())
-	localPublicKey := n.NoiseConfig.StaticKeypair.Public
-	if localPublicKey != nil {
-		n.Log.Verb("Local static key: %s", base64.StdEncoding.EncodeToString(localPublicKey))
+	if pub := n.NoiseConfig.StaticKeypair.Public; pub != nil {
+		n.Log.Verb("Local static key: %s", base64.StdEncoding.EncodeToString(pub))
 	}
 
-	acceptConnections := func() net.Conn {
+	if !n.Config.Daemon {
 		conn, err := listener.Accept()
 		if err != nil {
-			n.Log.Fatalf("Can't accept connection: %s", err)
+			n.Log.Fatalf("can't accept connection: %s", err)
 		}
 		n.Log.Verb("Connection from %s", conn.RemoteAddr().String())
-		return conn
+		n.newParams(conn).Router()
+		return
 	}
-	commonParams.Proxy = n.Config.Proxy
-	commonParams.ExecuteCmd = n.Config.ExecuteCmd
-	commonParams.Log = Verbose(n.Config.Verbose)
 
-	if n.Config.Daemon {
-		for {
-			commonParams.Conn = acceptConnections()
-			go commonParams.Router()
+	// Daemon mode: accept loop with graceful shutdown on SIGINT/SIGTERM.
+	var wg sync.WaitGroup
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sig
+		n.Log.Verb("Shutting down")
+		listener.Close()
+	}()
+
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			// listener closed (graceful shutdown) or real error; either way, stop accepting.
+			break
 		}
-	} else {
-		commonParams.Conn = acceptConnections()
-		commonParams.Router()
+		n.Log.Verb("Connection from %s", conn.RemoteAddr().String())
+		wg.Add(1)
+		go func(c net.Conn) {
+			defer wg.Done()
+			n.newParams(c).Router()
+		}(conn)
+	}
+	wg.Wait()
+}
+
+// newParams builds a per-connection Params from the noisecat config.
+// Each connection gets its own struct so daemon-mode goroutines cannot
+// race on shared state.
+func (n *Noisecat) newParams(conn net.Conn) *Params {
+	return &Params{
+		Conn:       conn,
+		Proxy:      n.Config.Proxy,
+		ExecuteCmd: n.Config.ExecuteCmd,
+		Log:        n.Log,
 	}
 }
