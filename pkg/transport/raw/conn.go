@@ -95,6 +95,13 @@ func (c *Conn) Write(b []byte) (int, error) {
 		// Encrypt
 		ciphertext, err := c.out.Encrypt(nil, nil, data[:m])
 		if err != nil {
+			// Per the Noise spec §5.3, on nonce exhaustion the session
+			// must be terminated. Surface the error and close the conn
+			// so subsequent reads/writes return cleanly instead of
+			// trying to reuse a poisoned CipherState.
+			if errors.Is(err, noise.ErrMaxNonce) {
+				_ = c.conn.Close()
+			}
 			return n, err
 		}
 
@@ -176,6 +183,10 @@ func (c *Conn) Read(b []byte) (int, error) {
 	// decrypt
 	plaintext, err := c.in.Decrypt(nil, nil, noiseMessage)
 	if err != nil {
+		// Noise spec §5.3: terminate the session on nonce exhaustion.
+		if errors.Is(err, noise.ErrMaxNonce) {
+			_ = c.conn.Close()
+		}
 		return 0, err
 	}
 
@@ -214,6 +225,24 @@ func (c *Conn) CloseWrite() error {
 		return cw.CloseWrite()
 	}
 	return c.conn.Close()
+}
+
+// Fingerprint returns the Noise handshake hash, suitable for channel
+// binding (Noise spec §11.2). The hash is only available after the
+// handshake has completed; calling it earlier returns the zero value.
+// Both peers compute the same hash; comparing them lets higher-level
+// protocols detect MITM that would otherwise validate against the
+// underlying key material but still produce diverging session state.
+func (c *Conn) Fingerprint() [32]byte {
+	c.handshakeMutex.Lock()
+	defer c.handshakeMutex.Unlock()
+	var out [32]byte
+	if !c.handshakeComplete || c.hs == nil {
+		return out
+	}
+	h := c.hs.ChannelBinding()
+	copy(out[:], h)
+	return out
 }
 
 // Noise-related functions

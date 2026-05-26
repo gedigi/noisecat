@@ -28,6 +28,10 @@ type Conn struct {
 	sck, rck [32]byte
 	sn, rn   uint64
 
+	// handshakeHash is the final BOLT-8 handshake hash, suitable for
+	// channel binding (returned by Fingerprint).
+	handshakeHash [32]byte
+
 	outLock, inLock sync.Mutex
 	readBuf         []byte
 }
@@ -59,6 +63,20 @@ func (c *Conn) CloseWrite() error {
 	return c.conn.Close()
 }
 
+// Fingerprint returns the BOLT-8 handshake hash after handshake
+// completion. Both peers compute the same 32-byte value; comparing
+// fingerprints out-of-band is the BOLT-8 / Noise way of doing
+// channel binding.
+func (c *Conn) Fingerprint() [32]byte {
+	c.hsMu.Lock()
+	defer c.hsMu.Unlock()
+	if !c.handshakeDone {
+		var zero [32]byte
+		return zero
+	}
+	return c.handshakeHash
+}
+
 // RemoteStatic returns the BOLT-8 remote static public key. For the
 // initiator this is the value supplied at construction. For the
 // responder it is populated after a successful handshake.
@@ -85,21 +103,22 @@ func (c *Conn) Handshake() error {
 		return nil
 	}
 	var (
-		ck  [32]byte
-		err error
+		ck, finalHash [32]byte
+		err           error
 	)
 	if c.isInitiator {
 		if c.remoteStatic == nil {
 			return errors.New("bolt8: initiator missing remote static key")
 		}
-		ck, err = runInitiator(c.conn, c.localStatic, c.remoteStatic, nil)
+		ck, finalHash, err = runInitiator(c.conn, c.localStatic, c.remoteStatic, nil)
 	} else {
 		var rs *secp256k1.PublicKey
-		ck, rs, err = runResponder(c.conn, c.localStatic, nil)
+		ck, finalHash, rs, err = runResponder(c.conn, c.localStatic, nil)
 		if err == nil {
 			c.remoteStatic = rs
 		}
 	}
+	c.handshakeHash = finalHash
 	if err != nil {
 		return err
 	}
