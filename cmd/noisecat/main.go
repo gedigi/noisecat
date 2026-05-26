@@ -8,7 +8,12 @@ import (
 	"github.com/gedigi/noisecat/pkg/noisecat"
 )
 
-var version = "1.0"
+// version is the default reported by `noisecat -h` when the binary is
+// not built through goreleaser. Releases override this via
+// `-ldflags '-X main.version=<tag>'` (see .goreleaser.yml). When
+// bumping for a release, keep this in sync with the most recent tag
+// so `go install` builds report a sensible value too.
+var version = "1.1.0"
 
 func parseFlags() noisecat.Config {
 	// PSKPlacement's zero value (0) is a valid PSK placement index per
@@ -30,7 +35,7 @@ func parseFlags() noisecat.Config {
 	flag.StringVar(&config.RStatic, "rstatic", "", "defines remote `static key` (32 bytes, base64)")
 	flag.StringVar(&config.LStatic, "lstatic", "", "loads local keypair from `file` (use -keygen to generate)")
 	flag.BoolVar(&config.Keygen, "keygen", false, "generates \"-proto\" appropriate keypair and prints it to stdout")
-	flag.StringVar(&config.Transport, "transport", "raw", "wire `transport`: raw (default) or noisesocket")
+	flag.StringVar(&config.Transport, "transport", "raw", "wire `transport`: raw (default), noisesocket, or bolt8 (auto-selected for secp256k1)")
 	flag.StringVar(&config.Prologue, "prologue", "", "application `prologue` mixed into the handshake hash")
 	flag.StringVar(&config.NegotiationData, "negotiation", "", "NoiseSocket negotiation_`data` (only used with -transport noisesocket)")
 	flag.StringVar(&config.Validate, "validate", "", "validate that the base64 `key` is well-formed for -proto's DH function, then exit")
@@ -132,6 +137,10 @@ func listSupportedProtocols() {
 
 	fmt.Print("Available Hash functions:\n")
 	listDetails(noisecat.HashStrByte)
+
+	fmt.Print("Available transports:\n")
+	fmt.Print("  raw, noisesocket, bolt8\n")
+	fmt.Print("\n  bolt8 is auto-selected when -proto uses secp256k1 (Lightning BOLT-8).\n")
 }
 
 func listDetails(m map[string]byte) {

@@ -24,8 +24,12 @@ Options:
   -l	listens for incoming connections
   -lstatic file
     	loads local keypair from file (use -keygen to generate)
+  -negotiation data
+    	NoiseSocket negotiation_data (only used with -transport noisesocket)
   -p port
     	uses source port (default "0")
+  -prologue prologue
+    	application prologue mixed into the handshake hash
   -proto protocol name
     	sets protocol name (default "Noise_NN_25519_AESGCM_SHA256")
   -proxy address:port
@@ -36,7 +40,11 @@ Options:
     	defines remote static key (32 bytes, base64)
   -s address
     	uses source address
+  -transport transport
+    	wire transport: raw (default), noisesocket, or bolt8 (auto-selected for secp256k1) (default "raw")
   -v	prints verbose output
+  -validate key
+    	validate that the base64 key is well-formed for -proto's DH function, then exit
 
 Protocol name format: Noise_PT_DH_CP_HS
 
@@ -49,18 +57,21 @@ Where:
   e.g. Noise_NN_25519_AESGCM_SHA256
 
 Available handshake patterns:
-  KK, KX, IX, NK, NX
-  XN, XX, KN, NN, XK
-  IN, IK
- 
+  NN, NK, NX, XN, XK,
+  XX, KN, KK, KX, IN,
+  IK, IX (each combinable with the psk0..psk3 modifier)
+
 Available DH functions:
-  25519
- 
+  25519, secp256k1
+
 Available Cipher functions:
   ChaChaPoly, AESGCM
- 
+
 Available Hash functions:
   BLAKE2s, BLAKE2b, SHA256, SHA512
+
+Available transports:
+  raw, noisesocket, bolt8
 ```
 
 The flags are similar to the traditional netcat. In short:
