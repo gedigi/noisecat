@@ -1,12 +1,13 @@
 package noisecat
 
 import (
+	"errors"
 	"io"
-	"log"
 	"net"
 	"os"
 	"os/exec"
-	"strings"
+
+	"github.com/mattn/go-shellwords"
 )
 
 // Params type defines the parameters required by the runners
@@ -21,11 +22,12 @@ type Params struct {
 func (c *Params) Router() {
 	defer c.Conn.Close()
 
-	if c.Proxy != "" {
+	switch {
+	case c.Proxy != "":
 		c.proxyConn()
-	} else if c.ExecuteCmd != "" {
+	case c.ExecuteCmd != "":
 		c.executeCmd()
-	} else {
+	default:
 		c.handleIO(os.Stdout, os.Stdin)
 	}
 }
@@ -33,40 +35,70 @@ func (c *Params) Router() {
 func (c *Params) proxyConn() {
 	pConn, err := net.Dial("tcp", c.Proxy)
 	if err != nil {
-		c.Log.Fatalf("Can't connect to remote host: %s", err)
+		c.Log.Errf("can't connect to proxy target: %s", err)
+		return
 	}
+	defer pConn.Close()
 	c.handleIO(pConn, pConn)
 }
 
 func (c *Params) executeCmd() {
-	cmdParse := strings.Split(c.ExecuteCmd, " ")
-	cmdName := cmdParse[0]
-	var cmdArgs []string
-	if len(cmdParse[1:]) > 0 {
-		cmdArgs = cmdParse[1:]
+	args, err := shellwords.Parse(c.ExecuteCmd)
+	if err != nil {
+		c.Log.Errf("can't parse -e command: %s", err)
+		return
 	}
-	cmd := exec.Command(cmdName, cmdArgs...)
+	if len(args) == 0 {
+		c.Log.Errf("can't parse -e command: empty")
+		return
+	}
+	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = c.Conn, c.Conn, c.Conn
-	cmd.Run()
+	if err := cmd.Run(); err != nil {
+		c.Log.Verb("command exited with error: %s", err)
+	}
 }
 
-func (c *Params) handleIO(w io.WriteCloser, r io.ReadCloser) {
-	channel := make(chan Progress)
+// progress reports the byte count and termination cause of one direction
+// of an io.Copy in handleIO.
+type progress struct {
+	Bytes int64
+	Dir   string
+	Err   error
+}
 
-	copyIO := func(writer io.WriteCloser, reader io.ReadCloser, dir string) {
-		defer func() {
-			reader.Close()
-			writer.Close()
-		}()
-		numBytes, _ := io.Copy(writer, reader)
-		channel <- Progress{Bytes: numBytes, Dir: dir}
+func (c *Params) handleIO(w io.Writer, r io.Reader) {
+	ch := make(chan progress, 2)
+
+	copyIO := func(dst io.Writer, src io.Reader, dir string) {
+		n, err := io.Copy(dst, src)
+		// Close every endpoint so the other direction's blocking Read/Write
+		// returns and handleIO can exit. Closing the noise conn is mandatory;
+		// closing dst/src (when they're separate Closers, e.g. a proxy conn
+		// or stdin) breaks the case where the peer is silent but the user
+		// (or the backing server) closes their side.
+		c.Conn.Close()
+		if closer, ok := dst.(io.Closer); ok && dst != c.Conn {
+			closer.Close()
+		}
+		if closer, ok := src.(io.Closer); ok && src != c.Conn {
+			closer.Close()
+		}
+		ch <- progress{Bytes: n, Dir: dir, Err: err}
 	}
 
 	go copyIO(c.Conn, r, "SNT")
 	go copyIO(w, c.Conn, "RCV")
 
 	for i := 0; i < 2; i++ {
-		s := <-channel
-		log.Printf("%s: %d", s.Dir, s.Bytes)
+		s := <-ch
+		c.Log.Verb("%s: %d bytes", s.Dir, s.Bytes)
+		if s.Err != nil && !errors.Is(s.Err, io.EOF) && !isClosedNet(s.Err) {
+			c.Log.Verb("%s error: %s", s.Dir, s.Err)
+		}
 	}
+}
+
+func isClosedNet(err error) bool {
+	return errors.Is(err, net.ErrClosed)
 }
