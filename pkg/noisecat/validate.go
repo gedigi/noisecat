@@ -49,7 +49,7 @@ func ValidateStaticKey(b64 string, dhFunc byte) error {
 // Noise protocol name to determine the DH function before validating.
 // Useful for CLI tools that already have a -proto string in hand.
 func ValidateStaticKeyForProtocol(b64, protoName string) error {
-	_, dhFunc, _, _, err := parseProtocolName(protoName)
+	_, dhFunc, _, _, _, err := parseProtocolName(protoName)
 	if err != nil {
 		return fmt.Errorf("can't determine DH function from protocol %q: %w", protoName, err)
 	}
