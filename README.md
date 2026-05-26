@@ -106,6 +106,7 @@ Companion flags (work with any transport):
 
 * `-prologue <string>` mixes the given byte string into the handshake hash. Both peers must use the same value.
 * `-negotiation <string>` (NoiseSocket only) is the initiator's first-message `negotiation_data`.
+* `-validate <key>` checks that the given base64-encoded value is a well-formed remote static key for the chosen `-proto` (length + curve-point parse for secp256k1) and exits — useful for sanity-checking an `-rstatic` value before opening a real connection.
 
 Example NoiseSocket round-trip on `localhost:4444`:
 
@@ -163,6 +164,6 @@ CI runs build/vet/test on Linux, macOS, and Windows; lint via `golangci-lint`; a
 - [x] add Makefile
 - [x] expose Lightning's BOLT-8 transport (Noise_XK_secp256k1_ChaChaPoly_SHA256)
 - [x] expose the NoiseSocket transport
-- [ ] add a static key validator helper function
+- [x] add a static key validator helper function
 - [ ] expose PSK-modified Noise patterns
 - [ ] add new features (suggestions are welcome, pull requests too!)
