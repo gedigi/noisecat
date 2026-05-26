@@ -29,8 +29,9 @@ func parseFlags() noisecat.Config {
 	flag.StringVar(&config.Transport, "transport", "raw", "wire `transport`: raw (default) or noisesocket")
 	flag.StringVar(&config.Prologue, "prologue", "", "application `prologue` mixed into the handshake hash")
 	flag.StringVar(&config.NegotiationData, "negotiation", "", "NoiseSocket negotiation_`data` (only used with -transport noisesocket)")
+	flag.StringVar(&config.Validate, "validate", "", "validate that the base64 `key` is well-formed for -proto's DH function, then exit")
 	flag.Parse()
-	if config.Keygen {
+	if config.Keygen || config.Validate != "" {
 		return config
 	}
 	if !config.Listen {
@@ -53,6 +54,15 @@ func main() {
 
 	config := parseFlags()
 	l := noisecat.Verbose(config.Verbose)
+
+	if config.Validate != "" {
+		if err := noisecat.ValidateStaticKeyForProtocol(config.Validate, config.Protocol); err != nil {
+			fmt.Fprintf(os.Stderr, "noisecat: invalid key: %s\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("OK")
+		os.Exit(0)
+	}
 
 	noiseConfig, err := config.ParseConfig()
 	if err != nil {

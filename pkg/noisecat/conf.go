@@ -53,6 +53,10 @@ type Config struct {
 	// NegotiationData is the NoiseSocket-only negotiation_data field sent
 	// with the initiator's first handshake message.
 	NegotiationData string
+	// Validate, when non-empty, causes the CLI to run ValidateStaticKey
+	// against this base64 string and exit. Useful for sanity-checking a
+	// -rstatic value before opening a real connection.
+	Validate string
 }
 
 // NoiseInterface interfaces with noise configurations
