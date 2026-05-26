@@ -1,0 +1,35 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+    - revive
+    - gosec
+  settings:
+    revive:
+      rules:
+        - name: unused-parameter
+          disabled: true
+    gosec:
+      excludes:
+        - G104 # ignored error returns are intentional in noisecat (CLI defaults)
+        - G204 # exec.Command with user input is the documented purpose of -e
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec
+          - errcheck
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
