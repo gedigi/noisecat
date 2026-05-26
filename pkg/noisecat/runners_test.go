@@ -130,25 +130,27 @@ func TestExecuteCmdMalformedQuoting(t *testing.T) {
 
 // TestProxyConnDrainsBackendAfterClientHalfClose is the regression test for
 // issue #6. The reported symptom: a client sends a request to noisecat in
-// -proxy mode and TCP-closes; the backend writes a response a moment later;
-// the client never sees it because the previous handleIO immediately tore
-// down both the noise conn and the proxy conn the instant either copy
+// -proxy mode and TCP-closes its write side; the backend writes a response
+// a moment later; the client never sees it because the previous handleIO
+// tore down the noise conn and the proxy conn the instant either copy
 // direction returned. With half-close semantics, the backend has time to
 // finish its write and the response is delivered.
+//
+// Uses real TCP on both sides so CloseWrite is meaningful — net.Pipe does
+// not support half-close.
 func TestProxyConnDrainsBackendAfterClientHalfClose(t *testing.T) {
+	const (
+		clientRequest   = "GET / HTTP/1.0\r\n\r\n"
+		backendDelay    = 200 * time.Millisecond
+		backendResponse = "HTTP/1.0 200 OK\r\nContent-Length: 5\r\n\r\nHELLO"
+	)
+
 	// Backend: read request, sleep, write response, close.
 	backend, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer backend.Close()
-
-	const (
-		clientRequest    = "GET / HTTP/1.0\r\n\r\n"
-		backendDelay     = 200 * time.Millisecond
-		backendResponse  = "HTTP/1.0 200 OK\r\nContent-Length: 5\r\n\r\nHELLO"
-	)
-
 	go func() {
 		conn, err := backend.Accept()
 		if err != nil {
@@ -163,28 +165,49 @@ func TestProxyConnDrainsBackendAfterClientHalfClose(t *testing.T) {
 		_, _ = conn.Write([]byte(backendResponse))
 	}()
 
-	clientSide, serverConn := net.Pipe()
-	defer clientSide.Close()
+	// Client-facing TCP pair: 'serverConn' is what Router operates on,
+	// 'clientConn' is what the test (acting as the client) uses.
+	frontEnd, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer frontEnd.Close()
+
+	serverAcceptedCh := make(chan net.Conn, 1)
+	go func() {
+		c, err := frontEnd.Accept()
+		if err != nil {
+			return
+		}
+		serverAcceptedCh <- c
+	}()
+
+	clientConn, err := net.Dial("tcp", frontEnd.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clientConn.Close()
+
+	serverConn := <-serverAcceptedCh
 	defer serverConn.Close()
 
-	p := &Params{
-		Conn:  serverConn,
-		Proxy: backend.Addr().String(),
-		Log:   Verbose(false),
-	}
+	p := &Params{Conn: serverConn, Proxy: backend.Addr().String(), Log: Verbose(false)}
 	go p.Router()
 
-	// Client sends the request then half-closes its write side. With
-	// net.Pipe there is no real half-close, so we just write the request
-	// and let serverConn read it; we keep the pipe open for the read side
-	// so we can collect the backend's response.
-	if _, err := clientSide.Write([]byte(clientRequest)); err != nil {
+	// Client sends the request and CloseWrites (half-closes its write
+	// side). With the old code, the server side would see this EOF and
+	// tear down the proxy connection before the backend's response made
+	// it back.
+	if _, err := clientConn.Write([]byte(clientRequest)); err != nil {
+		t.Fatal(err)
+	}
+	if err := clientConn.(*net.TCPConn).CloseWrite(); err != nil {
 		t.Fatal(err)
 	}
 
-	_ = clientSide.SetReadDeadline(time.Now().Add(3 * time.Second))
+	_ = clientConn.SetReadDeadline(time.Now().Add(3 * time.Second))
 	got := make([]byte, len(backendResponse))
-	if _, err := io.ReadFull(clientSide, got); err != nil {
+	if _, err := io.ReadFull(clientConn, got); err != nil {
 		t.Fatalf("expected to read backend response, got error: %v", err)
 	}
 	if string(got) != backendResponse {
