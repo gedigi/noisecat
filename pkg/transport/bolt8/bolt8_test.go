@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -304,4 +305,107 @@ func TestFingerprintMatches(t *testing.T) {
 	if clientFP == zero {
 		t.Fatal("fingerprint is zero — handshake didn't complete?")
 	}
+}
+
+// TestMACFailureClosesConn corrupts a byte in a transport-message length
+// frame before the receiver reads it. The decrypt MUST fail, and the
+// receiver's underlying TCP conn MUST be closed (BOLT-8 §3 termination
+// rule). A subsequent Read should return an error from a closed socket,
+// not just the same MAC failure with the socket still open.
+func TestMACFailureClosesConn(t *testing.T) {
+	respPriv, _ := secp256k1.GeneratePrivateKey()
+	initPriv, _ := secp256k1.GeneratePrivateKey()
+
+	// Set up a TCP listener for the BOLT-8 server.
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+
+	// Server side is wrapped in our test scaffolding so we can capture
+	// the raw conn and inject corruption into the wire bytes.
+	type serverResult struct {
+		err  error
+		read int
+	}
+	resultCh := make(chan serverResult, 1)
+	rawConnCh := make(chan net.Conn, 1)
+
+	go func() {
+		raw, err := l.Accept()
+		if err != nil {
+			resultCh <- serverResult{err: err}
+			return
+		}
+		server := Server(raw, respPriv)
+		buf := make([]byte, 64)
+		n, rerr := server.Read(buf)
+		rawConnCh <- raw
+		resultCh <- serverResult{err: rerr, read: n}
+	}()
+
+	// Tamper writer: sits between our BOLT-8 Conn and the server's
+	// listening socket. Writes are passed through; the first body-frame
+	// length header (the third 18-byte chunk on the wire — after the two
+	// 50-byte and 66-byte handshake acts) gets its first ciphertext byte
+	// XOR'd. Concretely, we just flip a bit in any post-act-3 write.
+
+	addr := l.Addr().(*net.TCPAddr)
+	rawClient, err := net.Dial("tcp", "127.0.0.1:"+strconv.Itoa(addr.Port))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tw := &tamperingConn{Conn: rawClient}
+	client := Client(tw, initPriv, respPriv.PubKey())
+	defer client.Close()
+	_ = client.SetDeadline(time.Now().Add(3 * time.Second))
+
+	// Make sure the handshake completes before we arm the tamperer.
+	if err := client.Handshake(); err != nil {
+		t.Fatalf("handshake: %v", err)
+	}
+	tw.armed = true
+
+	// Send a transport message; the tampering corrupts the on-wire length
+	// frame's first ciphertext byte, so the server's MAC check fails.
+	if _, err := client.Write([]byte("payload-that-will-be-corrupted")); err != nil {
+		t.Fatal(err)
+	}
+
+	result := <-resultCh
+	if result.err == nil {
+		t.Fatal("server Read returned no error after corruption")
+	}
+	if !strings.Contains(result.err.Error(), "decrypt") {
+		t.Fatalf("expected decrypt error, got %v", result.err)
+	}
+
+	// The server-side raw conn MUST be closed by now.
+	srvRaw := <-rawConnCh
+	_, err = srvRaw.Read(make([]byte, 1))
+	if err == nil {
+		t.Fatal("server raw conn still open after MAC failure")
+	}
+}
+
+// tamperingConn wraps a net.Conn and flips the second byte of the first
+// payload write that happens after `armed` is set. Hits the BOLT-8
+// post-handshake length frame's ciphertext bytes (bytes 0 and 1 of an
+// 18-byte length frame are encrypted plaintext-length bytes).
+type tamperingConn struct {
+	net.Conn
+	armed     bool
+	tampered  bool
+}
+
+func (t *tamperingConn) Write(p []byte) (int, error) {
+	if t.armed && !t.tampered && len(p) > 1 {
+		corrupted := make([]byte, len(p))
+		copy(corrupted, p)
+		corrupted[1] ^= 0xFF
+		t.tampered = true
+		return t.Conn.Write(corrupted)
+	}
+	return t.Conn.Write(p)
 }

@@ -209,6 +209,11 @@ func (c *Conn) Read(p []byte) (int, error) {
 	}
 	lenPlain, err := decryptWithAD(c.rk, c.rn, nil, lc)
 	if err != nil {
+		// BOLT-8 §3: "If the authentication fails, the receiver MUST
+		// terminate the connection." Close the underlying transport
+		// before surfacing the error so subsequent Reads / Writes do
+		// not try to keep going with a desynchronized nonce.
+		_ = c.conn.Close()
 		return 0, fmt.Errorf("bolt8: decrypt length: %w", err)
 	}
 	c.rn++
@@ -219,6 +224,9 @@ func (c *Conn) Read(p []byte) (int, error) {
 	}
 	plaintext, err := decryptWithAD(c.rk, c.rn, nil, body)
 	if err != nil {
+		// Same termination rule as above — once the body MAC fails the
+		// session is unrecoverable.
+		_ = c.conn.Close()
 		return 0, fmt.Errorf("bolt8: decrypt body: %w", err)
 	}
 	c.rn++

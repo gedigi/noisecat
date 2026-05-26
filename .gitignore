@@ -4,6 +4,7 @@
 *.so
 *.dylib
 noisecat-*
+/noisecat
 bin
 .idea
 
