@@ -32,6 +32,13 @@ type Config struct {
 	DHFunc     byte
 	CipherFunc byte
 	HashFunc   byte
+	// PSKPlacement is the psk-modifier index parsed out of the protocol
+	// name (e.g. "psk2" in Noise_NKpsk2_...). noPSK means no modifier;
+	// 0..3 are valid placements per the Noise spec. When set, parseNoise
+	// propagates the value into noise.Config.PresharedKeyPlacement so
+	// flynn/noise inserts the MixKeyAndHash(psk) token at the right
+	// position in the handshake.
+	PSKPlacement int8
 
 	PSK     string
 	RStatic string
@@ -59,7 +66,7 @@ func (config *Config) ParseConfig() (*noise.Config, error) {
 	if config.Keygen {
 		// Only the protocol matters for keygen; parse it and short-circuit.
 		var err error
-		config.Pattern, config.DHFunc, config.CipherFunc, config.HashFunc, err = parseProtocolName(config.Protocol)
+		config.Pattern, config.DHFunc, config.CipherFunc, config.HashFunc, config.PSKPlacement, err = parseProtocolName(config.Protocol)
 		return nil, err
 	}
 

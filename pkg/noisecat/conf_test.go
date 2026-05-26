@@ -59,17 +59,27 @@ func TestParseConfigValidation(t *testing.T) {
 		},
 		{
 			name:    "PSK wrong length",
-			cfg:     Config{Protocol: validProto, Listen: true, PSK: base64.StdEncoding.EncodeToString([]byte("short"))},
+			cfg:     Config{Protocol: "Noise_NNpsk0_25519_AESGCM_SHA256", Listen: true, PSK: base64.StdEncoding.EncodeToString([]byte("short"))},
 			wantErr: "32 bytes",
 		},
 		{
 			name:    "PSK not base64",
-			cfg:     Config{Protocol: validProto, Listen: true, PSK: "!!!not-base64!!!"},
+			cfg:     Config{Protocol: "Noise_NNpsk0_25519_AESGCM_SHA256", Listen: true, PSK: "!!!not-base64!!!"},
 			wantErr: "base64",
 		},
 		{
 			name: "PSK 32 bytes ok",
-			cfg:  Config{Protocol: validProto, Listen: true, PSK: base64.StdEncoding.EncodeToString(make([]byte, 32))},
+			cfg:  Config{Protocol: "Noise_NNpsk0_25519_AESGCM_SHA256", Listen: true, PSK: base64.StdEncoding.EncodeToString(make([]byte, 32))},
+		},
+		{
+			name:    "PSK without modifier rejected",
+			cfg:     Config{Protocol: validProto, Listen: true, PSK: base64.StdEncoding.EncodeToString(make([]byte, 32))},
+			wantErr: "psk modifier",
+		},
+		{
+			name:    "PSK modifier without -psk rejected",
+			cfg:     Config{Protocol: "Noise_NNpsk0_25519_AESGCM_SHA256", Listen: true},
+			wantErr: "psk modifier but -psk",
 		},
 		{
 			name:    "invalid protocol name",
