@@ -22,15 +22,17 @@ func TestValidateStaticKey(t *testing.T) {
 	}
 	realSecp := base64.StdEncoding.EncodeToString(priv.PubKey().SerializeCompressed())
 
-	// Build a 33-byte buffer that LOOKS like a compressed key (right
-	// version byte, right length) but with random x coordinate that does
-	// not correspond to a curve point. dcrd's ParsePubKey rejects it.
-	notOnCurve := make([]byte, 33)
-	notOnCurve[0] = 0x02
-	if _, err := rand.Read(notOnCurve[1:]); err != nil {
+	// Build a 33-byte buffer with an invalid SEC1 prefix byte. Compressed
+	// points use 0x02 or 0x03; anything else makes ParsePubKey reject
+	// the input deterministically. The more obvious "random x with 0x02
+	// prefix, off-curve" approach is flaky in CI because ~50% of random
+	// x values happen to lie on secp256k1.
+	badPrefix := make([]byte, 33)
+	if _, err := rand.Read(badPrefix[1:]); err != nil {
 		t.Fatal(err)
 	}
-	notOnCurveB64 := base64.StdEncoding.EncodeToString(notOnCurve)
+	badPrefix[0] = 0x00
+	notOnCurveB64 := base64.StdEncoding.EncodeToString(badPrefix)
 
 	cases := []struct {
 		name      string
