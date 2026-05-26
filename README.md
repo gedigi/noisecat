@@ -100,6 +100,7 @@ noisecat speaks the Noise Protocol Framework over a pluggable transport layer. T
 |---|---|---|
 | `raw` (default) | 2-byte BE length prefix + Noise message | noisecat's historical framing; interoperable with itself only. |
 | `noisesocket`   | [NoiseSocket spec](https://noiseprotocol.org/noisesocket): handshake messages carry `negotiation_data`, encrypted payloads contain an inner `body_len` + arbitrary padding, prologue is `"NoiseSocketInit1"` + `neg_data_len` + `neg_data` + app prologue | Spec-compliant, interoperable with other NoiseSocket peers. Only the Accept negotiation outcome is supported (no Switch/Retry/Reject). |
+| `bolt8`         | [Lightning Network's BOLT-8](https://github.com/lightning/bolts/blob/master/08-transport.md): `Noise_XK_secp256k1_ChaChaPoly_SHA256`, fixed-size handshake acts (50/50/66 bytes) with a 1-byte version prefix, encrypted 2-byte length headers + AEAD-tagged payloads, automatic rekey every 1000 messages, prologue defaults to `"lightning"`. | Auto-selected when the protocol name contains `secp256k1`. Interoperable with `lnd` / `cln` / `eclair` (Appendix A test vectors pass byte-for-byte). |
 
 Companion flags (work with any transport):
 
@@ -112,6 +113,24 @@ Example NoiseSocket round-trip on `localhost:4444`:
 $ noisecat -transport noisesocket -negotiation 'app=demo' -l -p 4444 &
 $ noisecat -transport noisesocket -negotiation 'app=demo' 127.0.0.1 4444
 ```
+
+#### Lightning (BOLT-8)
+
+Generate a secp256k1 static keypair, then connect to a node by its public key:
+
+```bash
+# 1. Generate (or reuse) a local static keypair
+$ noisecat -proto Noise_XK_secp256k1_ChaChaPoly_SHA256 -keygen > node.json
+$ chmod 600 node.json
+
+# 2. Connect to a Lightning node (rstatic is the node's compressed pubkey, base64-encoded)
+$ noisecat -proto Noise_XK_secp256k1_ChaChaPoly_SHA256 \
+    -lstatic node.json \
+    -rstatic <base64-encoded-33-byte-compressed-pubkey> \
+    <host> <port>
+```
+
+The BOLT-8 transport is auto-selected when the protocol name contains `secp256k1`; the `lightning` prologue is supplied automatically. To talk to two noisecats over BOLT-8, both ends need their own `node.json` and the client needs to know the server's compressed public key (the server prints it with `-v`).
 
 ### Proxying
 
@@ -142,6 +161,8 @@ CI runs build/vet/test on Linux, macOS, and Windows; lint via `golangci-lint`; a
 ## TODO
 - [x] write some tests
 - [x] add Makefile
+- [x] expose Lightning's BOLT-8 transport (Noise_XK_secp256k1_ChaChaPoly_SHA256)
+- [x] expose the NoiseSocket transport
 - [ ] add a static key validator helper function
 - [ ] expose PSK-modified Noise patterns
 - [ ] add new features (suggestions are welcome, pull requests too!)
