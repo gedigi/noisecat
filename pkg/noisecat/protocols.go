@@ -5,6 +5,7 @@ import "github.com/flynn/noise"
 const (
 	NOISE_DH_CURVE25519 = 1
 	NOISE_DH_CURVE448   = 2
+	NOISE_DH_SECP256K1  = 3 // BOLT-8 only; not a flynn/noise DH function
 
 	NOISE_CIPHER_CHACHAPOLY = 1
 	NOISE_CIPHER_AESGCM     = 2
@@ -30,10 +31,15 @@ const (
 
 // DH Funcs
 var DHStrByte = map[string]byte{
-	"25519": NOISE_DH_CURVE25519,
+	"25519":     NOISE_DH_CURVE25519,
+	"secp256k1": NOISE_DH_SECP256K1,
 	// "448":   NOISE_DH_CURVE448,
 }
 
+// DHByteObj maps Curve25519 (and would-be Curve448) to flynn/noise's
+// DHFunc interface. secp256k1 has no entry: it is implemented by the
+// bolt8 transport (pkg/transport/bolt8) directly from primitives and
+// never flows through flynn/noise.
 var DHByteObj = map[byte]noise.DHFunc{
 	NOISE_DH_CURVE25519: noise.DH25519,
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/flynn/noise"
 	"github.com/gedigi/noisecat/pkg/transport"
+	"github.com/gedigi/noisecat/pkg/transport/bolt8"
 	"github.com/gedigi/noisecat/pkg/transport/noisesocket"
 	"github.com/gedigi/noisecat/pkg/transport/raw"
 )
@@ -35,16 +36,24 @@ func resolveTransport(cfg *Config) (transport.Transport, error) {
 		return raw.New(), nil
 	case "noisesocket":
 		return noisesocket.New(), nil
+	case "bolt8":
+		return bolt8.New(), nil
 	default:
-		return nil, fmt.Errorf("unknown transport %q (expected: raw, noisesocket)", name)
+		return nil, fmt.Errorf("unknown transport %q (expected: raw, noisesocket, bolt8)", name)
 	}
 }
 
 // transportOptions packs the noisecat-level CLI flags into the
 // transport-level Options the chosen Transport understands.
 func (n *Noisecat) transportOptions() transport.Options {
+	prologue := n.Config.Prologue
+	// BOLT-8 mandates the literal prologue "lightning"; supply it
+	// transparently if the user has not overridden -prologue.
+	if prologue == "" && n.Config.Transport == "bolt8" {
+		prologue = "lightning"
+	}
 	return transport.Options{
-		Prologue:        []byte(n.Config.Prologue),
+		Prologue:        []byte(prologue),
 		NegotiationData: []byte(n.Config.NegotiationData),
 	}
 }

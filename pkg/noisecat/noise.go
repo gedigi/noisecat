@@ -15,6 +15,44 @@ func (config *Config) parseNoise() (*noise.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	// secp256k1 is implemented by the BOLT-8 transport directly and is not
+	// a flynn/noise DH function. Skip the usual noise.CipherSuite assembly
+	// and return a minimally-populated Config carrying only the keys —
+	// pkg/transport/bolt8 reads cfg.StaticKeypair and cfg.PeerStatic from it.
+	if config.DHFunc == NOISE_DH_SECP256K1 {
+		noiseConf := &noise.Config{
+			Random:    rand.Reader,
+			Initiator: !config.Listen,
+		}
+		// Local static (32-byte secp256k1 private key) is mandatory for
+		// every BOLT-8 endpoint.
+		kp, err := loadSecp256k1Keypair(config.LStatic)
+		if err != nil {
+			return nil, err
+		}
+		noiseConf.StaticKeypair = kp
+		// Remote static (33-byte compressed) is mandatory for the initiator
+		// because XK has the responder static as a pre-message.
+		if !config.Listen {
+			if config.RStatic == "" {
+				return nil, errors.New("BOLT-8 initiator requires -rstatic (33-byte compressed secp256k1 pubkey)")
+			}
+			rs, err := base64.StdEncoding.DecodeString(config.RStatic)
+			if err != nil {
+				return nil, fmt.Errorf("invalid -rstatic: %w", err)
+			}
+			if len(rs) != 33 {
+				return nil, errors.New("-rstatic for secp256k1 must decode to 33 bytes (compressed)")
+			}
+			noiseConf.PeerStatic = rs
+		}
+		// Auto-select the bolt8 transport if the user has not picked one
+		// explicitly. raw / noisesocket cannot speak BOLT-8 framing.
+		if config.Transport == "" || config.Transport == "raw" {
+			config.Transport = "bolt8"
+		}
+		return noiseConf, nil
+	}
 	cs := noise.NewCipherSuite(
 		DHByteObj[config.DHFunc],
 		CipherByteObj[config.CipherFunc],

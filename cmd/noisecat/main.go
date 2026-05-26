@@ -66,7 +66,13 @@ func main() {
 	}
 
 	if config.Keygen {
-		keypair, err := noisecat.GenerateKeypair(config.DHFunc, config.CipherFunc, config.HashFunc)
+		var keypair []byte
+		var err error
+		if config.DHFunc == noisecat.NOISE_DH_SECP256K1 {
+			keypair, err = noisecat.GenerateSecp256k1Keypair()
+		} else {
+			keypair, err = noisecat.GenerateKeypair(config.DHFunc, config.CipherFunc, config.HashFunc)
+		}
 		if err != nil {
 			l.Fatalf("%s", err)
 		}
