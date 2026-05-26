@@ -2,6 +2,7 @@ package noisecat
 
 import (
 	"encoding/base64"
+	"fmt"
 	"net"
 	"os"
 	"os/signal"
@@ -9,6 +10,8 @@ import (
 	"syscall"
 
 	"github.com/flynn/noise"
+	"github.com/gedigi/noisecat/pkg/transport"
+	"github.com/gedigi/noisecat/pkg/transport/noisesocket"
 	"github.com/gedigi/noisecat/pkg/transport/raw"
 )
 
@@ -19,16 +22,47 @@ type Noisecat struct {
 	Log         Verbose
 }
 
+// resolveTransport selects a Transport implementation based on the
+// noisecat Config. An empty / "raw" Transport field defaults to the
+// historical framing.
+func resolveTransport(cfg *Config) (transport.Transport, error) {
+	name := cfg.Transport
+	if name == "" {
+		name = "raw"
+	}
+	switch name {
+	case "raw":
+		return raw.New(), nil
+	case "noisesocket":
+		return noisesocket.New(), nil
+	default:
+		return nil, fmt.Errorf("unknown transport %q (expected: raw, noisesocket)", name)
+	}
+}
+
+// transportOptions packs the noisecat-level CLI flags into the
+// transport-level Options the chosen Transport understands.
+func (n *Noisecat) transportOptions() transport.Options {
+	return transport.Options{
+		Prologue:        []byte(n.Config.Prologue),
+		NegotiationData: []byte(n.Config.NegotiationData),
+	}
+}
+
 // StartClient starts a noisecat client
 func (n *Noisecat) StartClient() {
+	tp, err := resolveTransport(n.Config)
+	if err != nil {
+		n.Log.Fatalf("%s", err)
+	}
 	netAddress := net.JoinHostPort(n.Config.DstHost, n.Config.DstPort)
 	localAddress := net.JoinHostPort(n.Config.SrcHost, n.Config.SrcPort)
 
-	conn, err := raw.Dial("tcp", netAddress, localAddress, n.NoiseConfig)
+	conn, err := tp.Dial("tcp", netAddress, localAddress, n.NoiseConfig, n.transportOptions())
 	if err != nil {
 		n.Log.Fatalf("can't connect to %s/tcp: %s", netAddress, err)
 	}
-	n.Log.Verb("Connected to %s", conn.RemoteAddr().String())
+	n.Log.Verb("Connected to %s using transport=%s", conn.RemoteAddr().String(), tp.Name())
 	if pub := n.NoiseConfig.StaticKeypair.Public; pub != nil {
 		n.Log.Verb("Local static key: %s", base64.StdEncoding.EncodeToString(pub))
 	}
@@ -37,15 +71,19 @@ func (n *Noisecat) StartClient() {
 
 // StartServer starts a noisecat server
 func (n *Noisecat) StartServer() {
+	tp, err := resolveTransport(n.Config)
+	if err != nil {
+		n.Log.Fatalf("%s", err)
+	}
 	netAddress := net.JoinHostPort(n.Config.SrcHost, n.Config.SrcPort)
 
-	listener, err := raw.Listen("tcp", netAddress, n.NoiseConfig)
+	listener, err := tp.Listen("tcp", netAddress, n.NoiseConfig, n.transportOptions())
 	if err != nil {
 		n.Log.Fatalf("can't listen: %s", err)
 	}
 	defer func() { _ = listener.Close() }()
 
-	n.Log.Verb("Listening on %s/tcp", listener.Addr())
+	n.Log.Verb("Listening on %s/tcp using transport=%s", listener.Addr(), tp.Name())
 	if pub := n.NoiseConfig.StaticKeypair.Public; pub != nil {
 		n.Log.Verb("Local static key: %s", base64.StdEncoding.EncodeToString(pub))
 	}

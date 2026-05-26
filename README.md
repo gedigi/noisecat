@@ -92,6 +92,27 @@ $ noisecat <ip> 4444
 
 That's it!
 
+### Transports
+
+noisecat speaks the Noise Protocol Framework over a pluggable transport layer. The same Noise handshake patterns and DH/cipher/hash combinations work regardless of transport — only the on-the-wire framing differs.
+
+| `-transport` | Wire format | Notes |
+|---|---|---|
+| `raw` (default) | 2-byte BE length prefix + Noise message | noisecat's historical framing; interoperable with itself only. |
+| `noisesocket`   | [NoiseSocket spec](https://noiseprotocol.org/noisesocket): handshake messages carry `negotiation_data`, encrypted payloads contain an inner `body_len` + arbitrary padding, prologue is `"NoiseSocketInit1"` + `neg_data_len` + `neg_data` + app prologue | Spec-compliant, interoperable with other NoiseSocket peers. Only the Accept negotiation outcome is supported (no Switch/Retry/Reject). |
+
+Companion flags (work with any transport):
+
+* `-prologue <string>` mixes the given byte string into the handshake hash. Both peers must use the same value.
+* `-negotiation <string>` (NoiseSocket only) is the initiator's first-message `negotiation_data`.
+
+Example NoiseSocket round-trip on `localhost:4444`:
+
+```bash
+$ noisecat -transport noisesocket -negotiation 'app=demo' -l -p 4444 &
+$ noisecat -transport noisesocket -negotiation 'app=demo' 127.0.0.1 4444
+```
+
 ### Proxying
 
 `-proxy` turns noisecat into a TCP tunnel: the client speaks Noise to noisecat, noisecat forwards the decrypted bytes to the backend over plain TCP, and the backend's response is encrypted on the way back. The proxy uses TCP-style half-close, so a client that sends a request and closes its write side will still receive the backend's full response:
