@@ -71,7 +71,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	if config.Listen == false {
+	if !config.Listen {
 		nc.StartClient()
 	} else {
 		nc.StartServer()

@@ -77,10 +77,6 @@ func (config *Config) ParseConfig() (*noise.Config, error) {
 			return nil, fmt.Errorf("invalid -p source port %q", config.SrcPort)
 		}
 	}
-	if config.Listen && !config.Daemon && config.SrcPort == "0" {
-		// Listening on an ephemeral port is legal but almost never useful: warn.
-		// We can't log here directly without verbose state; the caller may show it.
-	}
 
 	return config.parseNoise()
 }

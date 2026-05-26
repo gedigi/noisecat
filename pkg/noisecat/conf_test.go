@@ -157,14 +157,7 @@ func TestCheckLocalKeypairRejectsShortKeys(t *testing.T) {
 }
 
 func TestGenerateKeypairRoundTrip(t *testing.T) {
-	cfg := Config{Protocol: "Noise_XX_25519_AESGCM_SHA256"}
-	if _, err := cfg.ParseConfig(); err != nil {
-		// parseConfig fails on XX without keypair source for the responder/initiator
-		// machinery — but XX as initiator just generates one. Only the byte fields
-		// matter for keygen.
-	}
-	// Parse protocol bytes via Keygen short-circuit.
-	cfg.Keygen = true
+	cfg := Config{Protocol: "Noise_XX_25519_AESGCM_SHA256", Keygen: true}
 	if _, err := cfg.ParseConfig(); err != nil {
 		t.Fatalf("ParseConfig in keygen mode: %v", err)
 	}

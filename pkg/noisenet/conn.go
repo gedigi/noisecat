@@ -98,8 +98,15 @@ func (c *Conn) Write(b []byte) (int, error) {
 			return n, err
 		}
 
-		// header (length)
-		length := []byte{byte(len(ciphertext) >> 8), byte(len(ciphertext) % 256)}
+		// header (length, big-endian). ciphertext = plaintext fragment
+		// (capped at MaxMsgLen above) + AEAD tag (16 bytes), which can in
+		// principle exceed 0xFFFF. Reject before encoding the length so
+		// we don't silently truncate.
+		if len(ciphertext) > 0xFFFF {
+			return n, errors.New("noise: ciphertext exceeds 16-bit length frame")
+		}
+		clen := uint16(len(ciphertext)) //nolint:gosec // bounded above
+		length := []byte{byte(clen >> 8), byte(clen & 0xFF)}
 
 		// Send data
 		_, err = c.conn.Write(append(length, ciphertext...))
@@ -228,8 +235,13 @@ func (c *Conn) Handshake() (err error) {
 			if err != nil {
 				return err
 			}
-			// header (length)
-			length := []byte{byte(len(msg) >> 8), byte(len(msg) % 256)}
+			// header (length, big-endian). Handshake messages are bounded
+			// by noise.MaxMsgLen (65535), but assert before encoding.
+			if len(msg) > 0xFFFF {
+				return errors.New("noise: handshake message exceeds 16-bit length frame")
+			}
+			mlen := uint16(len(msg)) //nolint:gosec // bounded above
+			length := []byte{byte(mlen >> 8), byte(mlen & 0xFF)}
 			// write
 			_, err = c.conn.Write(append(length, msg...))
 			if err != nil {
@@ -405,7 +417,7 @@ func DialWithDialer(dialer *net.Dialer, network, addr, localAddr string, config 
 	}
 
 	if err != nil {
-		rawConn.Close()
+		_ = rawConn.Close()
 		return nil, err
 	}
 

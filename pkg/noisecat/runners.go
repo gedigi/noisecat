@@ -20,7 +20,7 @@ type Params struct {
 
 // Router routes a connection based on provided parameters
 func (c *Params) Router() {
-	defer c.Conn.Close()
+	defer func() { _ = c.Conn.Close() }()
 
 	switch {
 	case c.Proxy != "":
@@ -38,7 +38,7 @@ func (c *Params) proxyConn() {
 		c.Log.Errf("can't connect to proxy target: %s", err)
 		return
 	}
-	defer pConn.Close()
+	defer func() { _ = pConn.Close() }()
 	c.handleIO(pConn, pConn)
 }
 
@@ -77,12 +77,12 @@ func (c *Params) handleIO(w io.Writer, r io.Reader) {
 		// closing dst/src (when they're separate Closers, e.g. a proxy conn
 		// or stdin) breaks the case where the peer is silent but the user
 		// (or the backing server) closes their side.
-		c.Conn.Close()
+		_ = c.Conn.Close()
 		if closer, ok := dst.(io.Closer); ok && dst != c.Conn {
-			closer.Close()
+			_ = closer.Close()
 		}
 		if closer, ok := src.(io.Closer); ok && src != c.Conn {
-			closer.Close()
+			_ = closer.Close()
 		}
 		ch <- progress{Bytes: n, Dir: dir, Err: err}
 	}

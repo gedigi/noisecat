@@ -43,7 +43,7 @@ func (n *Noisecat) StartServer() {
 	if err != nil {
 		n.Log.Fatalf("can't listen: %s", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	n.Log.Verb("Listening on %s/tcp", listener.Addr())
 	if pub := n.NoiseConfig.StaticKeypair.Public; pub != nil {
@@ -67,7 +67,7 @@ func (n *Noisecat) StartServer() {
 	go func() {
 		<-sig
 		n.Log.Verb("Shutting down")
-		listener.Close()
+		_ = listener.Close()
 	}()
 
 	for {
