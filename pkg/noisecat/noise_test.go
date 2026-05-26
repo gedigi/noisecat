@@ -2,6 +2,7 @@ package noisecat
 
 import (
 	"encoding/base64"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -126,36 +127,44 @@ func TestPSKProtocolNameParses(t *testing.T) {
 	}
 }
 
-// TestPSKRoundTrip exercises a full client/server handshake with a
-// psk-modified pattern, confirming flynn/noise honors the placement
-// and both peers derive matching session keys.
+// TestPSKRoundTrip parametrizes a full client/server ParseConfig round
+// trip across every psk placement (0, 1, 2, 3). At each placement the
+// derived noise.Config must agree on both the PSK bytes and the
+// PresharedKeyPlacement value — that's what tells flynn/noise where to
+// insert the MixKeyAndHash(psk) token in the handshake.
+//
+// Each PSK placement is valid for the NN pattern; the spec allows
+// applying psk0..psk3 to any non-trivial pattern.
 func TestPSKRoundTrip(t *testing.T) {
 	psk := make([]byte, 32)
 	for i := range psk {
 		psk[i] = byte(i)
 	}
-	clientCfg := &Config{
-		Protocol: "Noise_NNpsk0_25519_AESGCM_SHA256",
-		PSK:      base64.StdEncoding.EncodeToString(psk),
-	}
-	serverCfg := &Config{
-		Protocol: "Noise_NNpsk0_25519_AESGCM_SHA256",
-		Listen:   true,
-		PSK:      base64.StdEncoding.EncodeToString(psk),
-	}
-	clientNC, err := clientCfg.ParseConfig()
-	if err != nil {
-		t.Fatalf("client ParseConfig: %v", err)
-	}
-	serverNC, err := serverCfg.ParseConfig()
-	if err != nil {
-		t.Fatalf("server ParseConfig: %v", err)
-	}
-	if !bytesEqual32(clientNC.PresharedKey, serverNC.PresharedKey) {
-		t.Fatal("PSK bytes differ across peers")
-	}
-	if clientNC.PresharedKeyPlacement != serverNC.PresharedKeyPlacement {
-		t.Fatal("PresharedKeyPlacement differs across peers")
+	pskB64 := base64.StdEncoding.EncodeToString(psk)
+
+	for placement := 0; placement <= 3; placement++ {
+		t.Run("psk"+strconv.Itoa(placement), func(t *testing.T) {
+			proto := "Noise_NNpsk" + strconv.Itoa(placement) + "_25519_AESGCM_SHA256"
+			clientNC, err := (&Config{Protocol: proto, PSK: pskB64}).ParseConfig()
+			if err != nil {
+				t.Fatalf("client ParseConfig: %v", err)
+			}
+			serverNC, err := (&Config{Protocol: proto, Listen: true, PSK: pskB64}).ParseConfig()
+			if err != nil {
+				t.Fatalf("server ParseConfig: %v", err)
+			}
+			if !bytesEqual32(clientNC.PresharedKey, serverNC.PresharedKey) {
+				t.Fatal("PSK bytes differ across peers")
+			}
+			if clientNC.PresharedKeyPlacement != serverNC.PresharedKeyPlacement {
+				t.Fatalf("PresharedKeyPlacement differs across peers: client=%d server=%d",
+					clientNC.PresharedKeyPlacement, serverNC.PresharedKeyPlacement)
+			}
+			if clientNC.PresharedKeyPlacement != placement {
+				t.Fatalf("PresharedKeyPlacement = %d, want %d",
+					clientNC.PresharedKeyPlacement, placement)
+			}
+		})
 	}
 }
 
