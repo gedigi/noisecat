@@ -4,10 +4,9 @@ package noisenet
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -70,7 +69,7 @@ func (c *Conn) Write(b []byte) (int, error) {
 
 	//
 	if hp := c.config.Pattern; !c.isClient && len(hp.Messages) < 2 {
-		return 0, errors.New("A server should not write on one-way patterns")
+		return 0, errors.New("noise: server cannot write on a one-way pattern")
 	}
 
 	// Make sure to go through the handshake first
@@ -94,13 +93,23 @@ func (c *Conn) Write(b []byte) (int, error) {
 		}
 
 		// Encrypt
-		ciphertext := c.out.Encrypt(nil, nil, data[:m])
+		ciphertext, err := c.out.Encrypt(nil, nil, data[:m])
+		if err != nil {
+			return n, err
+		}
 
-		// header (length)
-		length := []byte{byte(len(ciphertext) >> 8), byte(len(ciphertext) % 256)}
+		// header (length, big-endian). ciphertext = plaintext fragment
+		// (capped at MaxMsgLen above) + AEAD tag (16 bytes), which can in
+		// principle exceed 0xFFFF. Reject before encoding the length so
+		// we don't silently truncate.
+		if len(ciphertext) > 0xFFFF {
+			return n, errors.New("noise: ciphertext exceeds 16-bit length frame")
+		}
+		clen := uint16(len(ciphertext)) //nolint:gosec // bounded above
+		length := []byte{byte(clen >> 8), byte(clen & 0xFF)}
 
 		// Send data
-		_, err := c.conn.Write(append(length, ciphertext...))
+		_, err = c.conn.Write(append(length, ciphertext...))
 		if err != nil {
 			return n, err
 		}
@@ -129,7 +138,7 @@ func (c *Conn) Read(b []byte) (int, error) {
 
 	// If this is a one-way pattern, do some checks
 	if hp := c.config.Pattern; !c.isClient && len(hp.Messages) < 2 {
-		return 0, errors.New("A client should not read on one-way patterns")
+		return 0, errors.New("noise: client cannot read on a one-way pattern")
 	}
 
 	// Lock the read socket
@@ -155,7 +164,7 @@ func (c *Conn) Read(b []byte) (int, error) {
 	}
 	length := (int(bufHeader[0]) << 8) | int(bufHeader[1])
 	if length > noise.MaxMsgLen {
-		return 2, errors.New("Noise: Noise message received exceeds NoiseMessageLength")
+		return 0, errors.New("noise: received message exceeds MaxMsgLen")
 	}
 
 	// read noise message from socket
@@ -207,13 +216,8 @@ func (c *Conn) Handshake() (err error) {
 		return nil
 	}
 
-	var remoteKeyPair *noise.DHKey
-	if c.config.PeerStatic != nil {
-		if len(c.config.PeerStatic) != 32 {
-			return errors.New("noise: the provided remote key is not 32-byte")
-		}
-		remoteKeyPair = &noise.DHKey{}
-		copy(remoteKeyPair.Public[:], c.config.PeerStatic)
+	if c.config.PeerStatic != nil && len(c.config.PeerStatic) != 32 {
+		return errors.New("noise: the provided remote key is not 32 bytes")
 	}
 	c.hs, err = noise.NewHandshakeState(*c.config)
 	if err != nil {
@@ -231,8 +235,13 @@ func (c *Conn) Handshake() (err error) {
 			if err != nil {
 				return err
 			}
-			// header (length)
-			length := []byte{byte(len(msg) >> 8), byte(len(msg) % 256)}
+			// header (length, big-endian). Handshake messages are bounded
+			// by noise.MaxMsgLen (65535), but assert before encoding.
+			if len(msg) > 0xFFFF {
+				return errors.New("noise: handshake message exceeds 16-bit length frame")
+			}
+			mlen := uint16(len(msg)) //nolint:gosec // bounded above
+			length := []byte{byte(mlen >> 8), byte(mlen & 0xFF)}
 			// write
 			_, err = c.conn.Write(append(length, msg...))
 			if err != nil {
@@ -245,7 +254,7 @@ func (c *Conn) Handshake() (err error) {
 			}
 			length := (int(bufHeader[0]) << 8) | int(bufHeader[1])
 			if length > noise.MaxMsgLen {
-				return errors.New("Noise: Noise message received exceeds NoiseMessageLength")
+				return errors.New("noise: handshake message exceeds MaxMsgLen")
 			}
 
 			msg, err = readBytes(c.conn, length)
@@ -314,7 +323,7 @@ type Listener struct {
 func (l *Listener) Accept() (net.Conn, error) {
 	c, err := l.Listener.Accept()
 	if err != nil {
-		return &Conn{}, err
+		return nil, err
 	}
 	return Server(c, l.config), nil
 }
@@ -335,18 +344,13 @@ func (l *Listener) Addr() net.Addr {
 // The configuration config must be non-nil.
 func Listen(network, laddr string, config *noise.Config) (net.Listener, error) {
 	if config == nil {
-		return &Listener{}, errors.New("Noise: no Config set")
+		return nil, errors.New("noise: no Config set")
 	}
-
 	l, err := net.Listen(network, laddr)
 	if err != nil {
-		return &Listener{}, err
+		return nil, err
 	}
-
-	noiseListener := &Listener{}
-	noiseListener.Listener = l
-	noiseListener.config = config
-	return noiseListener, nil
+	return &Listener{Listener: l, config: config}, nil
 }
 
 type timeoutError struct{}
@@ -386,19 +390,12 @@ func DialWithDialer(dialer *net.Dialer, network, addr, localAddr string, config 
 			errChannel <- timeoutError{}
 		})
 	}
-	localAddrArray := strings.Split(localAddr, ":")
-	if len(localAddrArray) != 2 {
-		return nil, errors.New("invalid source address")
-	}
-	localPort, err := strconv.Atoi(localAddrArray[1])
-	if err != nil {
-		return nil, errors.New("invalid source port")
-	}
-	localAddress := net.ParseIP(localAddrArray[0])
-
-	dialer.LocalAddr = &net.TCPAddr{
-		IP:   localAddress,
-		Port: localPort,
+	if localAddr != "" && localAddr != ":0" {
+		localTCP, err := net.ResolveTCPAddr(network, localAddr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid source address %q: %w", localAddr, err)
+		}
+		dialer.LocalAddr = localTCP
 	}
 	rawConn, err := dialer.Dial(network, addr)
 	if err != nil {
@@ -420,7 +417,7 @@ func DialWithDialer(dialer *net.Dialer, network, addr, localAddr string, config 
 	}
 
 	if err != nil {
-		rawConn.Close()
+		_ = rawConn.Close()
 		return nil, err
 	}
 

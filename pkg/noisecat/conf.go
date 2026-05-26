@@ -4,7 +4,11 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
+	"fmt"
+	"net"
+	"os"
+	"runtime"
+	"strconv"
 
 	"github.com/flynn/noise"
 )
@@ -34,13 +38,20 @@ type Config struct {
 	LStatic string
 }
 
-// NoiseInterface intrfaces with noise configurations
+// NoiseInterface interfaces with noise configurations
 type NoiseInterface interface {
 	GetLocalStaticPublic() []byte
 }
 
-// ParseConfig parses a configuration struct for setup and correctness
+// ParseConfig validates the user-facing flag combinations and produces a
+// noise.Config ready to be handed to the underlying noisenet package.
 func (config *Config) ParseConfig() (*noise.Config, error) {
+	if config.Keygen {
+		// Only the protocol matters for keygen; parse it and short-circuit.
+		var err error
+		config.Pattern, config.DHFunc, config.CipherFunc, config.HashFunc, err = parseProtocolName(config.Protocol)
+		return nil, err
+	}
 
 	if config.Daemon {
 		if !config.Listen {
@@ -51,24 +62,58 @@ func (config *Config) ParseConfig() (*noise.Config, error) {
 		}
 	}
 	if config.Proxy != "" && !config.Listen {
-		return nil, errors.New("Client mode doesn't support -proxy")
+		return nil, errors.New("client mode does not support -proxy")
+	}
+	if config.Proxy != "" && config.ExecuteCmd != "" {
+		return nil, errors.New("-proxy and -e are mutually exclusive")
+	}
+	if config.Proxy != "" {
+		if _, _, err := net.SplitHostPort(config.Proxy); err != nil {
+			return nil, fmt.Errorf("-proxy must be host:port: %w", err)
+		}
+	}
+	if config.SrcPort != "" {
+		if p, err := strconv.Atoi(config.SrcPort); err != nil || p < 0 || p > 65535 {
+			return nil, fmt.Errorf("invalid -p source port %q", config.SrcPort)
+		}
 	}
 
 	return config.parseNoise()
 }
 
 func (config *Config) checkLocalKeypair(cs noise.CipherSuite) (noise.DHKey, error) {
-	var keypair noise.DHKey
-	if config.LStatic != "" {
-		k, err := ioutil.ReadFile(config.LStatic)
-		if err != nil {
-			return noise.DHKey{}, errors.New("Can't read keyfile")
-		}
-		json.Unmarshal(k, &keypair)
-		if keypair.Public == nil {
-			return noise.DHKey{}, errors.New("Can't load keypair")
-		}
-		return keypair, nil
+	if config.LStatic == "" {
+		return cs.GenerateKeypair(rand.Reader)
 	}
-	return cs.GenerateKeypair(rand.Reader)
+	if err := warnIfWorldReadable(config.LStatic); err != nil {
+		return noise.DHKey{}, err
+	}
+	data, err := os.ReadFile(config.LStatic)
+	if err != nil {
+		return noise.DHKey{}, fmt.Errorf("can't read keyfile %q: %w", config.LStatic, err)
+	}
+	var keypair noise.DHKey
+	if err := json.Unmarshal(data, &keypair); err != nil {
+		return noise.DHKey{}, fmt.Errorf("can't parse keyfile %q: %w", config.LStatic, err)
+	}
+	if len(keypair.Public) != 32 || len(keypair.Private) != 32 {
+		return noise.DHKey{}, fmt.Errorf("keyfile %q: expected 32-byte public and private keys", config.LStatic)
+	}
+	return keypair, nil
+}
+
+// warnIfWorldReadable prints a warning to stderr if a key file is readable
+// by group or other on POSIX systems. It does not refuse to proceed.
+func warnIfWorldReadable(path string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("can't stat keyfile %q: %w", path, err)
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		fmt.Fprintf(os.Stderr, "noisecat: warning: keyfile %q is accessible by other users (mode %o); chmod 600 recommended\n", path, info.Mode().Perm())
+	}
+	return nil
 }

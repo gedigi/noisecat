@@ -30,12 +30,18 @@ func parseFlags() noisecat.Config {
 	if config.Keygen {
 		return config
 	}
-	if !config.Listen && flag.NArg() != 2 {
+	if !config.Listen {
+		if flag.NArg() != 2 {
+			flag.Usage()
+			os.Exit(2)
+		}
+		config.DstHost = flag.Arg(0)
+		config.DstPort = flag.Arg(1)
+	} else if flag.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "noisecat: positional arguments are not used with -l")
 		flag.Usage()
-		os.Exit(-1)
+		os.Exit(2)
 	}
-	config.DstHost = flag.Arg(0)
-	config.DstPort = flag.Arg(1)
 	return config
 }
 
@@ -65,7 +71,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	if config.Listen == false {
+	if !config.Listen {
 		nc.StartClient()
 	} else {
 		nc.StartServer()

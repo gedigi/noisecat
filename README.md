@@ -1,13 +1,13 @@
 # noisecat :smirk_cat:
 The noise swiss army knife
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/gedigi/noisecat)](https://goreportcard.com/report/github.com/gedigi/noisecat) [![Build Status](https://travis-ci.org/gedigi/noisecat.svg?branch=master)](https://travis-ci.org/gedigi/noisecat)
+[![Go Report Card](https://goreportcard.com/badge/github.com/gedigi/noisecat)](https://goreportcard.com/report/github.com/gedigi/noisecat) [![CI](https://github.com/gedigi/noisecat/actions/workflows/ci.yml/badge.svg)](https://github.com/gedigi/noisecat/actions/workflows/ci.yml)
 
 noisecat :smirk_cat: is a featured networking utility which reads and writes data across network connections, using the Noise Protocol Framework (and TCP/IP).
 
 
 ## Download and build
-Just `git clone` it, `make` it and you'll have `noisecat` binaries for macOS, Linux, FreeBSD, and Windows.
+Requires Go 1.21+. Just `git clone` it and `make` it; you'll get `noisecat` binaries for macOS, Linux, FreeBSD, and Windows under `bin/`.
 
 ## Usage
 This is how `noisecat -h` looks like:
@@ -49,7 +49,7 @@ Where:
   e.g. Noise_NN_25519_AESGCM_SHA256
 
 Available handshake patterns:
-  KK, KX, IX, NL, NX
+  KK, KX, IX, NK, NX
   XN, XX, KN, NN, XK
   IN, IK
  
@@ -69,9 +69,9 @@ The flags are similar to the traditional netcat. In short:
 
 The main difference is the Noise Protocol-related flags:
 * `-proto` sets the Noise Protocol name that you want to use
-* `-psk` sets a pre-shared key, known to both client and server, used to authenticate a handshake
-* `-rstatic` specifies the remote peer static (public) key, used in "K"-type handshakes
-* `-lstatic` specifies the local file where to load static keys from
+* `-psk` sets a pre-shared key — **base64-encoded 32 bytes** (e.g. the output of `head -c 32 /dev/urandom | base64`). PSK only takes effect with PSK-modified Noise patterns.
+* `-rstatic` specifies the remote peer static (public) key — base64-encoded 32 bytes — used in "K"-type handshakes
+* `-lstatic` specifies the local file where to load static keys from (recommend `chmod 600` on the file)
 
 Other features are:
 * `-proxy` allows to create a tunnel `client -noise-> server -tcp-> final endpoint`
@@ -92,8 +92,20 @@ $ noisecat <ip> 4444
 
 That's it!
 
+## Development
+
+```bash
+make test         # go test -race with coverage
+make vet          # go vet ./...
+make lint         # golangci-lint (install separately)
+make linux darwin windows freebsd   # cross-compile
+```
+
+CI runs build/vet/test on Linux, macOS, and Windows; lint via `golangci-lint`; and `govulncheck` for known CVEs on every push and PR. Tagging `vX.Y.Z` triggers a `goreleaser` build that publishes signed binaries and checksums to the corresponding GitHub Release.
+
 ## TODO
-- [ ] write some tests
+- [x] write some tests
 - [x] add Makefile
 - [ ] add a static key validator helper function
+- [ ] expose PSK-modified Noise patterns
 - [ ] add new features (suggestions are welcome, pull requests too!)

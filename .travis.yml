@@ -1,9 +1,0 @@
-language: go
-notifications:
-  email: false
-before_script:
-  - make deps
-script:
-  - make clean
-  - make test
-  - make all

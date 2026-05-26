@@ -67,7 +67,7 @@ var CipherByteObj = map[byte]noise.CipherFunc{
 // Handshake Patterns
 var PatternStrByte = map[string]byte{
 	"NN": NOISE_PATTERN_NN,
-	"NL": NOISE_PATTERN_NK,
+	"NK": NOISE_PATTERN_NK,
 	"NX": NOISE_PATTERN_NX,
 	"XN": NOISE_PATTERN_XN,
 	"XK": NOISE_PATTERN_XK,
