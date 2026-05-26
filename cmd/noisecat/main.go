@@ -11,7 +11,11 @@ import (
 var version = "1.0"
 
 func parseFlags() noisecat.Config {
-	config := noisecat.Config{}
+	// PSKPlacement's zero value (0) is a valid PSK placement index per
+	// the Noise spec; initialize the field to the NoPSK sentinel so a
+	// Config that never goes through parseProtocolName cannot
+	// accidentally install a PSK at placement 0.
+	config := noisecat.Config{PSKPlacement: noisecat.NoPSK}
 
 	flag.Usage = usage
 	flag.StringVar(&config.ExecuteCmd, "e", "", "executes the given `command`")

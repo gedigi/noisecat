@@ -45,11 +45,17 @@ func GenerateKeypair(dh, cipher, hash byte) ([]byte, error) {
 	return json.Marshal(keypair)
 }
 
-// noPSK is the sentinel value returned by parseProtocolName for protocols
-// without a psk modifier. -1 fits the int8 type used in noise.Config's
-// PresharedKeyPlacement (where 0 is a valid placement index, so a separate
-// "unset" value is needed).
-const noPSK int8 = -1
+// NoPSK is the sentinel value returned by parseProtocolName for
+// protocols without a psk modifier. -1 fits the int8 type used in
+// noise.Config's PresharedKeyPlacement (where 0 is a valid placement
+// index, so a separate "unset" value is needed). External callers
+// constructing a Config{} from scratch should initialize
+// Config.PSKPlacement to NoPSK — otherwise the zero value would
+// look like a request for psk0 placement.
+const NoPSK int8 = -1
+
+// noPSK is the legacy in-package alias for NoPSK kept for diff-stability.
+const noPSK = NoPSK
 
 // protocolRegexp matches Noise protocol names like
 //
