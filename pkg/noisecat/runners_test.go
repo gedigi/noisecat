@@ -128,6 +128,114 @@ func TestExecuteCmdMalformedQuoting(t *testing.T) {
 	}
 }
 
+// TestProxyConnDrainsBackendAfterClientHalfClose is the regression test for
+// issue #6. The reported symptom: a client sends a request to noisecat in
+// -proxy mode and TCP-closes; the backend writes a response a moment later;
+// the client never sees it because the previous handleIO immediately tore
+// down both the noise conn and the proxy conn the instant either copy
+// direction returned. With half-close semantics, the backend has time to
+// finish its write and the response is delivered.
+func TestProxyConnDrainsBackendAfterClientHalfClose(t *testing.T) {
+	// Backend: read request, sleep, write response, close.
+	backend, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backend.Close()
+
+	const (
+		clientRequest    = "GET / HTTP/1.0\r\n\r\n"
+		backendDelay     = 200 * time.Millisecond
+		backendResponse  = "HTTP/1.0 200 OK\r\nContent-Length: 5\r\n\r\nHELLO"
+	)
+
+	go func() {
+		conn, err := backend.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		buf := make([]byte, len(clientRequest))
+		if _, err := io.ReadFull(conn, buf); err != nil {
+			return
+		}
+		time.Sleep(backendDelay)
+		_, _ = conn.Write([]byte(backendResponse))
+	}()
+
+	clientSide, serverConn := net.Pipe()
+	defer clientSide.Close()
+	defer serverConn.Close()
+
+	p := &Params{
+		Conn:  serverConn,
+		Proxy: backend.Addr().String(),
+		Log:   Verbose(false),
+	}
+	go p.Router()
+
+	// Client sends the request then half-closes its write side. With
+	// net.Pipe there is no real half-close, so we just write the request
+	// and let serverConn read it; we keep the pipe open for the read side
+	// so we can collect the backend's response.
+	if _, err := clientSide.Write([]byte(clientRequest)); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = clientSide.SetReadDeadline(time.Now().Add(3 * time.Second))
+	got := make([]byte, len(backendResponse))
+	if _, err := io.ReadFull(clientSide, got); err != nil {
+		t.Fatalf("expected to read backend response, got error: %v", err)
+	}
+	if string(got) != backendResponse {
+		t.Fatalf("got %q, want %q", got, backendResponse)
+	}
+}
+
+// TestProxyConnSafetyTimeout asserts that handleIO will not hang forever
+// if one direction completes but the other is stuck (e.g. silent backend).
+func TestProxyConnSafetyTimeout(t *testing.T) {
+	// Backend that accepts but never sends or closes.
+	backend, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backend.Close()
+	go func() {
+		conn, err := backend.Accept()
+		if err != nil {
+			return
+		}
+		// Hold the connection open until the listener closes.
+		defer conn.Close()
+		<-time.After(10 * time.Second)
+	}()
+
+	a, b := net.Pipe()
+	defer a.Close()
+	defer b.Close()
+
+	p := &Params{
+		Conn:          a,
+		Proxy:         backend.Addr().String(),
+		Log:           Verbose(false),
+		SafetyTimeout: 200 * time.Millisecond,
+	}
+	done := make(chan struct{})
+	go func() { p.Router(); close(done) }()
+
+	// Close the client side so the SNT direction finishes immediately,
+	// leaving RCV blocked on a silent backend — the safety timer should
+	// tear it down.
+	b.Close()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Router did not unblock within the safety timeout")
+	}
+}
+
 func TestProxyConnForwardsBidirectionally(t *testing.T) {
 	backend, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

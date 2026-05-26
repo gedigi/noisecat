@@ -202,6 +202,20 @@ func (c *Conn) Close() error {
 	return c.conn.Close()
 }
 
+// CloseWrite signals end-of-stream on the write half of the connection. If
+// the underlying transport supports TCP-style half-close (any type that
+// implements `interface{ CloseWrite() error }`, including *net.TCPConn),
+// the underlying half-close is invoked so the peer's Read returns EOF
+// while our Read can still receive remaining inbound data. If the
+// transport does not support half-close (e.g. net.Pipe used in tests),
+// CloseWrite falls back to a full Close.
+func (c *Conn) CloseWrite() error {
+	if cw, ok := c.conn.(interface{ CloseWrite() error }); ok {
+		return cw.CloseWrite()
+	}
+	return c.conn.Close()
+}
+
 // Noise-related functions
 
 // Handshake runs the client or server handshake protocol if

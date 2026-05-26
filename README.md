@@ -92,6 +92,21 @@ $ noisecat <ip> 4444
 
 That's it!
 
+### Proxying
+
+`-proxy` turns noisecat into a TCP tunnel: the client speaks Noise to noisecat, noisecat forwards the decrypted bytes to the backend over plain TCP, and the backend's response is encrypted on the way back. The proxy uses TCP-style half-close, so a client that sends a request and closes its write side will still receive the backend's full response:
+
+```bash
+# Terminal 1 — start a plain-TCP backend
+$ python3 -m http.server 8000
+
+# Terminal 2 — noise-protected proxy on 19999
+$ noisecat -v -k -l -proxy 127.0.0.1:8000 -p 19999 127.0.0.1
+
+# Terminal 3 — client
+$ printf 'GET / HTTP/1.0\r\n\r\n' | noisecat 127.0.0.1 19999
+```
+
 ## Development
 
 ```bash
