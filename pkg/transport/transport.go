@@ -32,6 +32,10 @@ import (
 // Transport is the contract every wire-protocol implementation honors.
 // Implementations are stateless; per-connection state lives on the returned
 // net.Conn / net.Listener values.
+//
+// Per-transport semantics — particularly the handling of Options.Prologue —
+// vary by implementation; see the field-level docstrings on Options for the
+// specific rules each transport applies.
 type Transport interface {
 	// Name returns the human-readable identifier (e.g. "raw", "noisesocket",
 	// "bolt8"). Matches what the noisecat -transport flag accepts.

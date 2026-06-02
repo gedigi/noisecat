@@ -20,11 +20,9 @@ builds:
     goarch:
       - amd64
       - arm64
-    ignore:
-      - goos: windows
-        goarch: arm64
-      - goos: freebsd
-        goarch: arm64
+    # No ignore list: noisecat is a pure-Go CLI with CGO disabled, so
+    # the cross-compile works for every {os, arch} combination above —
+    # including windows/arm64 and freebsd/arm64 (Pi-class servers).
     ldflags:
       - -s -w
       - -X main.version={{.Version}}
