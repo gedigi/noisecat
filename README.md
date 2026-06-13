@@ -7,7 +7,8 @@ noisecat is a netcat-style networking utility that speaks the [Noise Protocol Fr
 
 - Open authenticated, encrypted TCP sessions with any Noise handshake pattern (NN, NK, XX, IK, …) plus the standard PSK modifiers (psk0–psk3).
 - Talk to Lightning Network nodes over [BOLT-8](https://github.com/lightning/bolts/blob/master/08-transport.md) (`Noise_XK_secp256k1_ChaChaPoly_SHA256` with the spec's wire framing — passes Appendix A test vectors byte-for-byte).
-- Speak the [NoiseSocket](https://noiseprotocol.org/noisesocket) wire format.
+- Speak the [NoiseSocket](https://noiseprotocol.org/noisesocket) wire format, with an opt-in Reject/Retry/Switch negotiation layer.
+- Speak [WhatsApp's multi-device](https://github.com/tulir/whatsmeow) Noise wire protocol — handshake + pinned-certificate verification against the real backend, or peer-to-peer between two noisecat instances.
 - Tunnel decrypted traffic to a plain-TCP backend (`-proxy`), or run a command on connect (`-e`) — the classic netcat use cases, with the link encrypted by Noise.
 
 ## Install
@@ -29,7 +30,7 @@ $ V=1.1.1
 $ curl -L "https://github.com/gedigi/noisecat/releases/download/v${V}/noisecat_${V}_darwin_arm64.tar.gz" | tar -xz noisecat
 ```
 
-**Via `go install`** (requires Go 1.23+):
+**Via `go install`** (requires Go 1.25+):
 
 ```bash
 go install github.com/gedigi/noisecat/cmd/noisecat@latest
@@ -84,7 +85,7 @@ Options:
   -s address
     	uses source address
   -transport transport
-    	wire transport: raw (default), noisesocket, or bolt8 (auto-selected for secp256k1) (default "raw")
+    	wire transport: raw (default), noisesocket, bolt8 (auto-selected for secp256k1), or whatsapp (default "raw")
   -v	prints verbose output
   -validate key
     	validate that the base64 key is well-formed for -proto's DH function, then exit
@@ -116,7 +117,7 @@ Available Hash functions:
   BLAKE2s, BLAKE2b, SHA256, SHA512
 
 Available transports:
-  raw, noisesocket, bolt8
+  raw, noisesocket, bolt8, whatsapp
 ```
 
 The flags mirror traditional netcat:
@@ -198,6 +199,7 @@ noisecat speaks the Noise Protocol Framework over a pluggable transport layer. T
 | `raw` (default)  | 2-byte big-endian length prefix + Noise message | noisecat's historical framing; interoperable with itself only. |
 | `noisesocket`    | [NoiseSocket spec](https://noiseprotocol.org/noisesocket): handshake messages carry `negotiation_data`, encrypted payloads contain an inner `body_len` + arbitrary padding, prologue is `"NoiseSocketInit1"` + `neg_data_len` + `neg_data` + app prologue | Spec-compliant, Accept-only by default. Opt into the **noisecat v1 negotiation layer** (Reject / Retry / Switch) with the `-ns-*` flags below. |
 | `bolt8`          | [BOLT-8](https://github.com/lightning/bolts/blob/master/08-transport.md): `Noise_XK_secp256k1_ChaChaPoly_SHA256`, fixed-size handshake acts (50 / 50 / 66 bytes) with a 1-byte version prefix, encrypted 2-byte length headers + AEAD-tagged payloads, automatic rekey every 1000 messages, prologue defaults to `"lightning"` | Auto-selected when `-proto` uses `secp256k1`. Interoperable with `lnd` / `cln` / `eclair` — Appendix A test vectors pass byte-for-byte. |
+| `whatsapp`       | [WhatsApp multi-device](https://github.com/tulir/whatsmeow): `Noise_XX_25519_AESGCM_SHA256`, a one-time `WA` header (prologue) + 3-byte length frames, handshake messages wrapped in protobuf, prologue is the WA header | Connects to WhatsApp's real backend (handshake + pinned-certificate verification, **no login**) or peers two noisecat instances. See [the WhatsApp section](#whatsapp). |
 
 Companion flags that work with any transport:
 
@@ -232,6 +234,43 @@ $ noisecat -transport noisesocket 127.0.0.1 4444 \
 
 Swap `-ns-policy retry` for `switch` to have the listener drive the `XX` handshake itself, or `reject` to refuse outright.
 
+## WhatsApp
+
+WhatsApp's multi-device protocol uses the Noise Protocol Framework — specifically `Noise_XX_25519_AESGCM_SHA256` — under a service-specific wire envelope: a one-time `WA` header (also mixed in as the Noise prologue), 3-byte big-endian length frames, and handshake messages wrapped in protobuf. The `whatsapp` transport implements that envelope, the way the `bolt8` transport implements Lightning's. The wire details were derived from [`whatsmeow`](https://github.com/tulir/whatsmeow).
+
+The transport has two modes.
+
+### Connecting to the real WhatsApp backend
+
+With **no address**, the transport connects to WhatsApp's production websocket (`wss://web.whatsapp.com/ws/chat`), runs the Noise handshake, and **verifies the server certificate chain against WhatsApp's pinned root key** (an XEdDSA/Curve25519 chain: root → intermediate → leaf, with the leaf key bound to the handshake's server static).
+
+```bash
+$ noisecat -v -transport whatsapp
+2026/06/13 23:26:45 Connected to ... using transport=whatsapp
+```
+
+This proves protocol-level interoperability with the live backend. It does **not** log in: noisecat sends an empty `ClientFinish` payload, which the Noise layer accepts but WhatsApp's application layer rejects. Real login requires WhatsApp account credentials / QR pairing and the full Signal-protocol app layer (what `whatsmeow`/`Baileys` implement), which is out of scope. Use this for protocol research and interop testing only — not for messaging or automation that would violate WhatsApp's Terms of Service.
+
+### Peer-to-peer (two noisecat instances)
+
+You cannot impersonate WhatsApp's real servers (you don't hold their key), but two noisecat instances can speak the WhatsApp framing to each other over plain TCP — like the other transports. With `-l` or a `host port`, the transport runs peer-to-peer with no certificate exchange. This gives you, for example, a bind shell tunneled over the WhatsApp wire protocol:
+
+```bash
+# Listener binds a shell, speaking the WhatsApp framing
+$ noisecat -transport whatsapp -l -p 4444 -e /bin/sh
+
+# Client connects (flags must precede the host/port)
+$ noisecat -transport whatsapp 127.0.0.1 4444
+```
+
+(`-keygen`/`-lstatic` work as usual to give an endpoint a fixed Noise identity; otherwise an ephemeral one is generated per connection.)
+
+### Limitations
+
+- No login, no messaging, no Signal/E2E app layer — handshake + certificate verification only against the real backend.
+- The real-backend mode is a fixed websocket endpoint; the pinned root key and `WA` header version track whatsmeow and may need updating if WhatsApp rotates them.
+- The live handshake is covered by a test gated behind `NOISECAT_WA_LIVE=1` (it needs network to a third-party service and never runs in CI).
+
 ## Development
 
 ```bash
@@ -241,7 +280,7 @@ make lint         # golangci-lint (install separately)
 make linux darwin windows freebsd   # cross-compile
 ```
 
-Requires Go 1.23+. CI runs build / vet / test on Linux, macOS, and Windows; lints via `golangci-lint`; and runs `govulncheck` for known CVEs on every push and PR. Tagging `vX.Y.Z` triggers a `goreleaser` build that publishes archives + sha256 checksums to the corresponding GitHub Release, each archive accompanied by a CycloneDX SBOM and the checksums file cosign-signed via GitHub OIDC. Dependabot keeps Go modules and Actions up to date weekly.
+Requires Go 1.25+. CI runs build / vet / test on Linux, macOS, and Windows; lints via `golangci-lint`; and runs `govulncheck` for known CVEs on every push and PR. Tagging `vX.Y.Z` triggers a `goreleaser` build that publishes archives + sha256 checksums to the corresponding GitHub Release, each archive accompanied by a CycloneDX SBOM and the checksums file cosign-signed via GitHub OIDC. Dependabot keeps Go modules and Actions up to date weekly.
 
 ## Contributing
 
@@ -251,6 +290,8 @@ Bug reports, feature suggestions, and pull requests are welcome — open an issu
 
 - [`github.com/flynn/noise`](https://github.com/flynn/noise) for the Noise Protocol Framework primitives that the `raw` and `noisesocket` transports build on.
 - [`github.com/decred/dcrd/dcrec/secp256k1`](https://github.com/decred/dcrd) for the pure-Go secp256k1 implementation underpinning the BOLT-8 transport.
+- [`github.com/tulir/whatsmeow`](https://github.com/tulir/whatsmeow) as the reference for WhatsApp's multi-device Noise wire format, certificate chain, and pinned root key.
+- [`github.com/coder/websocket`](https://github.com/coder/websocket) for the WebSocket client the WhatsApp transport dials over, and [`filippo.io/edwards25519`](https://filippo.io/edwards25519) for the XEdDSA certificate-signature verification.
 - [`github.com/mattn/go-shellwords`](https://github.com/mattn/go-shellwords) for parsing the `-e` command line.
 
 ## License
