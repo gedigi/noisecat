@@ -35,7 +35,7 @@ func parseFlags() noisecat.Config {
 	flag.StringVar(&config.RStatic, "rstatic", "", "defines remote `static key` (32 bytes, base64)")
 	flag.StringVar(&config.LStatic, "lstatic", "", "loads local keypair from `file` (use -keygen to generate)")
 	flag.BoolVar(&config.Keygen, "keygen", false, "generates \"-proto\" appropriate keypair and prints it to stdout")
-	flag.StringVar(&config.Transport, "transport", "raw", "wire `transport`: raw (default), noisesocket, or bolt8 (auto-selected for secp256k1)")
+	flag.StringVar(&config.Transport, "transport", "raw", "wire `transport`: raw (default), noisesocket, bolt8 (auto-selected for secp256k1), or whatsapp")
 	flag.StringVar(&config.Prologue, "prologue", "", "application `prologue` mixed into the handshake hash")
 	flag.StringVar(&config.NegotiationData, "negotiation", "", "NoiseSocket negotiation_`data` (only used with -transport noisesocket)")
 	flag.StringVar(&config.Validate, "validate", "", "validate that the base64 `key` is well-formed for -proto's DH function, then exit")
@@ -50,12 +50,28 @@ func parseFlags() noisecat.Config {
 		return config
 	}
 	if !config.Listen {
-		if flag.NArg() != 2 {
+		// The whatsapp transport accepts either no address (connect to the
+		// real WhatsApp backend) or a host+port (peer-to-peer to another
+		// noisecat); other transports always require host+port.
+		if config.Transport == "whatsapp" {
+			switch flag.NArg() {
+			case 0:
+				// real WhatsApp backend, fixed endpoint
+			case 2:
+				config.DstHost = flag.Arg(0)
+				config.DstPort = flag.Arg(1)
+			default:
+				fmt.Fprintln(os.Stderr, "noisecat: -transport whatsapp takes either no address (real backend) or host+port (peer-to-peer)")
+				flag.Usage()
+				os.Exit(2)
+			}
+		} else if flag.NArg() != 2 {
 			flag.Usage()
 			os.Exit(2)
+		} else {
+			config.DstHost = flag.Arg(0)
+			config.DstPort = flag.Arg(1)
 		}
-		config.DstHost = flag.Arg(0)
-		config.DstPort = flag.Arg(1)
 	} else if flag.NArg() != 0 {
 		fmt.Fprintln(os.Stderr, "noisecat: positional arguments are not used with -l")
 		flag.Usage()
@@ -145,8 +161,11 @@ func listSupportedProtocols() {
 	listDetails(noisecat.HashStrByte)
 
 	fmt.Print("Available transports:\n")
-	fmt.Print("  raw, noisesocket, bolt8\n")
+	fmt.Print("  raw, noisesocket, bolt8, whatsapp\n")
 	fmt.Print("\n  bolt8 is auto-selected when -proto uses secp256k1 (Lightning BOLT-8).\n")
+	fmt.Print("  whatsapp (no address) connects to WhatsApp's real backend (handshake +\n")
+	fmt.Print("  certificate verification; no login). With -l or a host+port it peers two\n")
+	fmt.Print("  noisecat instances over the WhatsApp wire protocol (e.g. -l -e /bin/sh).\n")
 }
 
 func listDetails(m map[string]byte) {

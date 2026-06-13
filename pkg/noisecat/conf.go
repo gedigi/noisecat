@@ -176,6 +176,19 @@ func (config *Config) ParseConfig() (*noise.Config, error) {
 	if err := config.validateNegotiation(); err != nil {
 		return nil, err
 	}
+	if config.Transport == "whatsapp" {
+		// WhatsApp speaks a fixed protocol; default -proto to it (so a
+		// static keypair is provisioned for either role) unless the user
+		// picked a non-default one. The transport runs its own XX state
+		// machine, so any other protocol would be silently ignored —
+		// reject it instead of misleading the user.
+		switch config.Protocol {
+		case "", "Noise_NN_25519_AESGCM_SHA256", "Noise_XX_25519_AESGCM_SHA256":
+			config.Protocol = "Noise_XX_25519_AESGCM_SHA256"
+		default:
+			return nil, fmt.Errorf("-transport whatsapp only supports Noise_XX_25519_AESGCM_SHA256, not %q", config.Protocol)
+		}
+	}
 
 	return config.parseNoise()
 }

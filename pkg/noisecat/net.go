@@ -15,6 +15,7 @@ import (
 	"github.com/gedigi/noisecat/pkg/transport/bolt8"
 	"github.com/gedigi/noisecat/pkg/transport/noisesocket"
 	"github.com/gedigi/noisecat/pkg/transport/raw"
+	"github.com/gedigi/noisecat/pkg/transport/whatsapp"
 )
 
 // Noisecat defines the main network configuration
@@ -56,8 +57,13 @@ func resolveTransport(cfg *Config) (transport.Transport, error) {
 			return nil, fmt.Errorf("transport=bolt8 only supports secp256k1; the chosen DH function is not")
 		}
 		return bolt8.New(), nil
+	case "whatsapp":
+		if cfg.DHFunc != NOISE_DH_CURVE25519 {
+			return nil, fmt.Errorf("transport=whatsapp requires Curve25519 (Noise_XX_25519_AESGCM_SHA256)")
+		}
+		return whatsapp.New(), nil
 	default:
-		return nil, fmt.Errorf("unknown transport %q (expected: raw, noisesocket, bolt8)", name)
+		return nil, fmt.Errorf("unknown transport %q (expected: raw, noisesocket, bolt8, whatsapp)", name)
 	}
 }
 
