@@ -26,7 +26,7 @@ cosign verify-blob \
 
 ```bash
 # macOS Apple Silicon, replace the version with the one you want from the Releases page:
-$ V=1.1.1
+$ V=1.2.0
 $ curl -L "https://github.com/gedigi/noisecat/releases/download/v${V}/noisecat_${V}_darwin_arm64.tar.gz" | tar -xz noisecat
 ```
 

@@ -13,7 +13,7 @@ import (
 // `-ldflags '-X main.version=<tag>'` (see .goreleaser.yml). When
 // bumping for a release, keep this in sync with the most recent tag
 // so `go install` builds report a sensible value too.
-var version = "1.1.0"
+var version = "1.2.0"
 
 func parseFlags() noisecat.Config {
 	// PSKPlacement's zero value (0) is a valid PSK placement index per
