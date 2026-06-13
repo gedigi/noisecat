@@ -15,6 +15,7 @@ import (
 	"github.com/gedigi/noisecat/pkg/transport/bolt8"
 	"github.com/gedigi/noisecat/pkg/transport/noisesocket"
 	"github.com/gedigi/noisecat/pkg/transport/raw"
+	"github.com/gedigi/noisecat/pkg/transport/udp"
 	"github.com/gedigi/noisecat/pkg/transport/whatsapp"
 )
 
@@ -37,6 +38,14 @@ type Noisecat struct {
 //     and therefore cannot accept secp256k1 (which BOLT-8 implements
 //     directly, outside flynn/noise).
 func resolveTransport(cfg *Config) (transport.Transport, error) {
+	// -u runs over reliable UDP (KCP) with the raw Noise framing. It is
+	// validated against incompatible transports in ParseConfig.
+	if cfg.UDP {
+		if cfg.DHFunc == NOISE_DH_SECP256K1 {
+			return nil, fmt.Errorf("-u (UDP) cannot speak secp256k1")
+		}
+		return udp.New(), nil
+	}
 	name := cfg.Transport
 	if name == "" {
 		name = "raw"
@@ -132,7 +141,7 @@ func (n *Noisecat) StartServer() {
 	}
 	defer func() { _ = listener.Close() }()
 
-	n.Log.Verb("Listening on %s/tcp using transport=%s", listener.Addr(), tp.Name())
+	n.Log.Verb("Listening on %s/%s using transport=%s", listener.Addr(), n.Config.netLabel(), tp.Name())
 	if pub := n.NoiseConfig.StaticKeypair.Public; pub != nil {
 		n.Log.Verb("Local static key: %s", base64.StdEncoding.EncodeToString(pub))
 	}

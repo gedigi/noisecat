@@ -42,6 +42,7 @@ func parseFlags() noisecat.Config {
 	flag.BoolVar(&config.IPv4Only, "4", false, "use IPv4 only")
 	flag.BoolVar(&config.IPv6Only, "6", false, "use IPv6 only")
 	flag.IntVar(&config.TimeoutSeconds, "w", 0, "timeout in `seconds` for connect/handshake and idle connections (0 = none)")
+	flag.BoolVar(&config.UDP, "u", false, "use UDP (reliable, via KCP) instead of TCP; raw transport + Curve25519 only")
 	flag.StringVar(&config.NSFallback, "ns-fallback", "", "noisesocket client: comma-separated fallback `protocols` accepted on retry/switch")
 	flag.StringVar(&config.NSSupport, "ns-support", "", "noisesocket listener: comma-separated supported `protocols` (enables negotiation)")
 	flag.StringVar(&config.NSPolicy, "ns-policy", "", "noisesocket listener action on unsupported proposal: reject|retry|switch (default reject)")

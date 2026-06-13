@@ -70,6 +70,11 @@ type Config struct {
 	// established connection's data phase. Zero means no timeout.
 	TimeoutSeconds int
 
+	// UDP (-u) runs the connection over reliable UDP (KCP) instead of TCP,
+	// using the raw Noise framing. Only valid with the raw transport and a
+	// Curve25519 protocol.
+	UDP bool
+
 	// NoiseSocket negotiation (noisesocket transport only). Negotiation
 	// activates when NSFallback (client) or NSSupport (server) is set.
 	//
@@ -113,6 +118,14 @@ func (config *Config) negotiationEnabled() bool {
 // layer uses to materialize a noise.Config for a retry/switch target.
 func (config *Config) buildNoiseConfigForProtocol(protocol string, initiator bool) (*noise.Config, error) {
 	return config.buildNoise25519Config(protocol, initiator)
+}
+
+// netLabel returns "udp" or "tcp" for log messages.
+func (config *Config) netLabel() string {
+	if config.UDP {
+		return "udp"
+	}
+	return "tcp"
 }
 
 // network returns the net package network string for the selected
@@ -172,6 +185,9 @@ func (config *Config) ParseConfig() (*noise.Config, error) {
 	}
 	if config.TimeoutSeconds < 0 {
 		return nil, fmt.Errorf("invalid -w timeout %d: must be >= 0", config.TimeoutSeconds)
+	}
+	if config.UDP && config.Transport != "" && config.Transport != "raw" {
+		return nil, fmt.Errorf("-u (UDP) is only supported with the raw transport, not %q", config.Transport)
 	}
 	if err := config.validateNegotiation(); err != nil {
 		return nil, err
