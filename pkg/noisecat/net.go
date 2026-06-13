@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/flynn/noise"
 	"github.com/gedigi/noisecat/pkg/transport"
@@ -69,10 +70,26 @@ func (n *Noisecat) transportOptions() transport.Options {
 	if prologue == "" && n.Config.Transport == "bolt8" {
 		prologue = "lightning"
 	}
-	return transport.Options{
+	opts := transport.Options{
 		Prologue:        []byte(prologue),
 		NegotiationData: []byte(n.Config.NegotiationData),
+		DialTimeout:     time.Duration(n.Config.TimeoutSeconds) * time.Second,
 	}
+	if n.Config.Transport == "noisesocket" && n.Config.negotiationEnabled() {
+		neg := &transport.Negotiation{
+			BuildConfig: n.Config.buildNoiseConfigForProtocol,
+		}
+		if n.Config.Listen {
+			neg.Supported = splitList(n.Config.NSSupport)
+			neg.Policy = transport.NegotiationPolicy(n.Config.NSPolicy)
+		} else {
+			neg.Proposed = n.Config.Protocol
+			neg.Fallback = splitList(n.Config.NSFallback)
+			neg.AppData = []byte(n.Config.NegotiationData)
+		}
+		opts.Negotiation = neg
+	}
+	return opts
 }
 
 // StartClient starts a noisecat client
@@ -84,7 +101,7 @@ func (n *Noisecat) StartClient() {
 	netAddress := net.JoinHostPort(n.Config.DstHost, n.Config.DstPort)
 	localAddress := net.JoinHostPort(n.Config.SrcHost, n.Config.SrcPort)
 
-	conn, err := tp.Dial("tcp", netAddress, localAddress, n.NoiseConfig, n.transportOptions())
+	conn, err := tp.Dial(n.Config.network(), netAddress, localAddress, n.NoiseConfig, n.transportOptions())
 	if err != nil {
 		n.Log.Fatalf("can't connect to %s/tcp: %s", netAddress, err)
 	}
@@ -103,7 +120,7 @@ func (n *Noisecat) StartServer() {
 	}
 	netAddress := net.JoinHostPort(n.Config.SrcHost, n.Config.SrcPort)
 
-	listener, err := tp.Listen("tcp", netAddress, n.NoiseConfig, n.transportOptions())
+	listener, err := tp.Listen(n.Config.network(), netAddress, n.NoiseConfig, n.transportOptions())
 	if err != nil {
 		n.Log.Fatalf("can't listen: %s", err)
 	}
@@ -154,6 +171,9 @@ func (n *Noisecat) StartServer() {
 // Each connection gets its own struct so daemon-mode goroutines cannot
 // race on shared state.
 func (n *Noisecat) newParams(conn net.Conn) *Params {
+	// Apply the -w idle timeout to the established data phase. The
+	// dial/handshake phase is already bounded by transport.Options.DialTimeout.
+	conn = newIdleConn(conn, time.Duration(n.Config.TimeoutSeconds)*time.Second)
 	return &Params{
 		Conn:       conn,
 		Proxy:      n.Config.Proxy,

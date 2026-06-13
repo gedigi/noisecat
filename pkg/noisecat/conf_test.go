@@ -15,9 +15,9 @@ import (
 func TestParseConfigValidation(t *testing.T) {
 	validProto := "Noise_NN_25519_AESGCM_SHA256"
 	cases := []struct {
-		name      string
-		cfg       Config
-		wantErr   string // substring; empty means success
+		name    string
+		cfg     Config
+		wantErr string // substring; empty means success
 	}{
 		{
 			name: "client mode ok",
@@ -85,6 +85,20 @@ func TestParseConfigValidation(t *testing.T) {
 			name:    "invalid protocol name",
 			cfg:     Config{Protocol: "not-a-protocol", Listen: true},
 			wantErr: "invalid protocol",
+		},
+		{
+			name:    "-4 and -6 mutually exclusive",
+			cfg:     Config{Protocol: validProto, Listen: true, IPv4Only: true, IPv6Only: true},
+			wantErr: "mutually exclusive",
+		},
+		{
+			name: "-4 alone ok",
+			cfg:  Config{Protocol: validProto, Listen: true, IPv4Only: true},
+		},
+		{
+			name:    "negative -w rejected",
+			cfg:     Config{Protocol: validProto, Listen: true, TimeoutSeconds: -1},
+			wantErr: "must be >= 0",
 		},
 	}
 

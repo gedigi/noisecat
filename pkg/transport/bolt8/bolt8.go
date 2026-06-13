@@ -27,7 +27,7 @@ func New() *Transport { return &Transport{} }
 func (Transport) Name() string { return "bolt8" }
 
 // Dial opens a BOLT-8 connection. localAddr is forwarded to net.Dialer.
-func (Transport) Dial(network, addr, localAddr string, cfg *noise.Config, _ transport.Options) (net.Conn, error) {
+func (Transport) Dial(network, addr, localAddr string, cfg *noise.Config, opts transport.Options) (net.Conn, error) {
 	priv, err := localPrivFromCfg(cfg)
 	if err != nil {
 		return nil, err
@@ -39,7 +39,7 @@ func (Transport) Dial(network, addr, localAddr string, cfg *noise.Config, _ tran
 	if err != nil {
 		return nil, errors.New("bolt8: invalid -rstatic; want 33-byte compressed secp256k1")
 	}
-	var d net.Dialer
+	d := net.Dialer{Timeout: opts.DialTimeout}
 	if localAddr != "" {
 		laddr, err := net.ResolveTCPAddr(network, localAddr)
 		if err != nil {

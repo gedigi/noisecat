@@ -53,20 +53,34 @@ func (config *Config) parseNoise() (*noise.Config, error) {
 		}
 		return noiseConf, nil
 	}
-	cs := noise.NewCipherSuite(
-		DHByteObj[config.DHFunc],
-		CipherByteObj[config.CipherFunc],
-		HashByteObj[config.HashFunc],
-	)
+	return config.buildNoise25519Config(config.Protocol, !config.Listen)
+}
+
+// buildNoise25519Config assembles a *noise.Config for a single flynn/noise
+// protocol name in the requested role, loading the key material the
+// pattern requires (PSK, local/remote static) from the Config. It is used
+// both for the primary -proto and, during NoiseSocket negotiation, to
+// build configs for retry/switch target protocols (which is why the role
+// is a parameter rather than derived from config.Listen). secp256k1 is
+// rejected: it is handled by the bolt8 transport, not flynn/noise.
+func (config *Config) buildNoise25519Config(protoName string, initiator bool) (*noise.Config, error) {
+	pattern, dhFunc, cipherFunc, hashFunc, pskPlacement, err := parseProtocolName(protoName)
+	if err != nil {
+		return nil, err
+	}
+	if dhFunc == NOISE_DH_SECP256K1 {
+		return nil, fmt.Errorf("protocol %q uses secp256k1, which the noisesocket/raw transports cannot speak", protoName)
+	}
+	cs := noise.NewCipherSuite(DHByteObj[dhFunc], CipherByteObj[cipherFunc], HashByteObj[hashFunc])
 	noiseConf := &noise.Config{
 		CipherSuite: cs,
 		Random:      rand.Reader,
-		Pattern:     PatternByteObj[config.Pattern],
-		Initiator:   !config.Listen,
+		Pattern:     PatternByteObj[pattern],
+		Initiator:   initiator,
 	}
 
 	if config.PSK != "" {
-		if config.PSKPlacement == noPSK {
+		if pskPlacement == noPSK {
 			return nil, errors.New("-psk set but protocol has no psk modifier — use e.g. Noise_NKpsk2_25519_AESGCM_SHA256")
 		}
 		psk, err := base64.StdEncoding.DecodeString(config.PSK)
@@ -77,9 +91,9 @@ func (config *Config) parseNoise() (*noise.Config, error) {
 			return nil, errors.New("PSK must decode to 32 bytes")
 		}
 		noiseConf.PresharedKey = psk
-		noiseConf.PresharedKeyPlacement = int(config.PSKPlacement)
-	} else if config.PSKPlacement != noPSK {
-		return nil, fmt.Errorf("protocol %s has a psk modifier but -psk was not provided", config.Protocol)
+		noiseConf.PresharedKeyPlacement = int(pskPlacement)
+	} else if pskPlacement != noPSK {
+		return nil, fmt.Errorf("protocol %s has a psk modifier but -psk was not provided", protoName)
 	}
 
 	checkRemoteStatic := func() error {

@@ -9,6 +9,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 
 	"github.com/flynn/noise"
 )
@@ -57,6 +58,74 @@ type Config struct {
 	// against this base64 string and exit. Useful for sanity-checking a
 	// -rstatic value before opening a real connection.
 	Validate string
+
+	// IPv4Only / IPv6Only restrict address resolution to one family,
+	// mapping to the -4 / -6 flags. They are mutually exclusive; when
+	// both are false the network is the family-agnostic "tcp".
+	IPv4Only bool
+	IPv6Only bool
+
+	// TimeoutSeconds is the -w value: the maximum time (in seconds) a
+	// dial+handshake may take, and the idle timeout applied to an
+	// established connection's data phase. Zero means no timeout.
+	TimeoutSeconds int
+
+	// NoiseSocket negotiation (noisesocket transport only). Negotiation
+	// activates when NSFallback (client) or NSSupport (server) is set.
+	//
+	// NSFallback is the initiator's comma-separated list of protocols it
+	// will accept if the responder asks it to retry or switch.
+	NSFallback string
+	// NSSupport is the responder's comma-separated list of supported
+	// protocols, in preference order.
+	NSSupport string
+	// NSPolicy is the responder's action when the proposed protocol is
+	// unsupported: "reject" (default), "retry", or "switch".
+	NSPolicy string
+}
+
+// splitList splits a comma-separated flag value into a trimmed,
+// empty-free slice. Returns nil for an empty string.
+func splitList(s string) []string {
+	if s == "" {
+		return nil
+	}
+	var out []string
+	for _, part := range strings.Split(s, ",") {
+		if p := strings.TrimSpace(part); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// negotiationEnabled reports whether the NoiseSocket negotiation layer is
+// active for this config (client proposes fallbacks, or server advertises
+// supported protocols).
+func (config *Config) negotiationEnabled() bool {
+	if config.Listen {
+		return config.NSSupport != ""
+	}
+	return config.NSFallback != ""
+}
+
+// buildNoiseConfigForProtocol is the factory the noisesocket negotiation
+// layer uses to materialize a noise.Config for a retry/switch target.
+func (config *Config) buildNoiseConfigForProtocol(protocol string, initiator bool) (*noise.Config, error) {
+	return config.buildNoise25519Config(protocol, initiator)
+}
+
+// network returns the net package network string for the selected
+// address family: "tcp4" with -4, "tcp6" with -6, or "tcp" otherwise.
+func (config *Config) network() string {
+	switch {
+	case config.IPv4Only:
+		return "tcp4"
+	case config.IPv6Only:
+		return "tcp6"
+	default:
+		return "tcp"
+	}
 }
 
 // NoiseInterface interfaces with noise configurations
@@ -98,8 +167,46 @@ func (config *Config) ParseConfig() (*noise.Config, error) {
 			return nil, fmt.Errorf("invalid -p source port %q", config.SrcPort)
 		}
 	}
+	if config.IPv4Only && config.IPv6Only {
+		return nil, errors.New("-4 and -6 are mutually exclusive")
+	}
+	if config.TimeoutSeconds < 0 {
+		return nil, fmt.Errorf("invalid -w timeout %d: must be >= 0", config.TimeoutSeconds)
+	}
+	if err := config.validateNegotiation(); err != nil {
+		return nil, err
+	}
 
 	return config.parseNoise()
+}
+
+// validateNegotiation checks the NoiseSocket negotiation flag combinations.
+func (config *Config) validateNegotiation() error {
+	anyNeg := config.NSFallback != "" || config.NSSupport != "" || config.NSPolicy != ""
+	if !anyNeg {
+		return nil
+	}
+	if config.Transport != "noisesocket" {
+		return errors.New("-ns-fallback/-ns-support/-ns-policy require -transport noisesocket")
+	}
+	if config.Listen {
+		if config.NSFallback != "" {
+			return errors.New("-ns-fallback is a client option; the listener uses -ns-support")
+		}
+	} else {
+		if config.NSSupport != "" {
+			return errors.New("-ns-support is a listener option; the client uses -ns-fallback")
+		}
+		if config.NSPolicy != "" {
+			return errors.New("-ns-policy is a listener option")
+		}
+	}
+	switch config.NSPolicy {
+	case "", "reject", "retry", "switch":
+	default:
+		return fmt.Errorf("invalid -ns-policy %q: must be reject, retry, or switch", config.NSPolicy)
+	}
+	return nil
 }
 
 func (config *Config) checkLocalKeypair(cs noise.CipherSuite) (noise.DHKey, error) {

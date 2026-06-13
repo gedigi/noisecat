@@ -25,6 +25,7 @@ package transport
 
 import (
 	"net"
+	"time"
 
 	"github.com/flynn/noise"
 )
@@ -66,4 +67,68 @@ type Options struct {
 	// each handshake message. Ignored by transports that don't have a
 	// notion of negotiation (raw, bolt8).
 	NegotiationData []byte
+
+	// DialTimeout bounds how long a Dial may take to establish the TCP
+	// connection and complete the Noise handshake. Zero means no limit.
+	// Honored by every transport's Dial; ignored by Listen. Maps to the
+	// noisecat -w flag.
+	DialTimeout time.Duration
+
+	// Negotiation, when non-nil, activates the noisesocket transport's
+	// Reject/Retry/Switch negotiation layer (noisecat v1 convention).
+	// Other transports ignore it. When nil, noisesocket keeps its
+	// spec-compliant, Accept-only behavior. See the Negotiation docs.
+	Negotiation *Negotiation
+}
+
+// NegotiationPolicy is the responder's action when the initiator proposes
+// a protocol the responder does not support.
+type NegotiationPolicy string
+
+const (
+	// PolicyReject closes the connection with a reason.
+	PolicyReject NegotiationPolicy = "reject"
+	// PolicyRetry asks the initiator to retry with a supported protocol.
+	PolicyRetry NegotiationPolicy = "retry"
+	// PolicySwitch inverts roles: the responder becomes the initiator of
+	// its preferred protocol.
+	PolicySwitch NegotiationPolicy = "switch"
+)
+
+// Negotiation carries the data the noisesocket transport needs to run the
+// noisecat v1 negotiation layer. The BuildConfig factory keeps Noise
+// protocol/key parsing in the caller (pkg/noisecat) so the transport stays
+// a pure framing layer.
+//
+// Fields are split by role; a Dial uses the initiator fields, a Listen's
+// accepted conns use the responder fields. BuildConfig and AppData are
+// shared.
+type Negotiation struct {
+	// BuildConfig returns a ready noise.Config for the named protocol in
+	// the requested role (initiator or responder), with the key material
+	// the pattern requires already loaded. It is called once per handshake
+	// attempt (a retry or switch triggers another call). Returns an error
+	// if the protocol is unknown or required keys are missing.
+	BuildConfig func(protocol string, initiator bool) (*noise.Config, error)
+
+	// AppData is the user's opaque negotiation payload (-negotiation),
+	// carried base64-encoded in the initiator's proposal as data=.
+	AppData []byte
+
+	// Initiator-side fields.
+
+	// Proposed is the protocol name the initiator advertises first.
+	Proposed string
+	// Fallback lists additional protocols the initiator will accept if the
+	// responder asks it to retry or switch. The proposed protocol is always
+	// implicitly allowed.
+	Fallback []string
+
+	// Responder-side fields.
+
+	// Supported lists the protocols the responder accepts, in preference
+	// order (the first is used as the retry/switch target).
+	Supported []string
+	// Policy is the action taken when the proposed protocol is unsupported.
+	Policy NegotiationPolicy
 }

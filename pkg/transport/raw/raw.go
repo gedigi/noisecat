@@ -23,7 +23,9 @@ func (Transport) Dial(network, addr, localAddr string, cfg *noise.Config, opts t
 	if len(opts.Prologue) > 0 {
 		applyPrologue(cfg, opts.Prologue)
 	}
-	return Dial(network, addr, localAddr, cfg)
+	// DialWithDialer applies dialer.Timeout across both the TCP connect
+	// and the Noise handshake, which is exactly the -w semantics we want.
+	return DialWithDialer(&net.Dialer{Timeout: opts.DialTimeout}, network, addr, localAddr, cfg)
 }
 
 // Listen creates a noise listener using the raw transport's framing.

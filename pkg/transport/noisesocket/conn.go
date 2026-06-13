@@ -12,11 +12,15 @@
 //     initial_negotiation_data || application_prologue. The application_prologue
 //     is whatever the caller passed in transport.Options.Prologue.
 //
-// Only the Accept negotiation outcome is implemented (responder reads the
+// The default path implements only the Accept outcome (responder reads the
 // initiator's negotiation_data, accepts, replies with empty negotiation_data
-// on every subsequent message). Switch, Retry, and Reject are out of scope
-// for the noisecat CLI: they need an interactive callback and are not how
-// noisecat is used.
+// on every subsequent message) and stays spec-interoperable.
+//
+// When a transport.Options.Negotiation is supplied, the connection instead
+// runs the noisecat v1 negotiation layer (see negotiation.go and
+// handshake_neg.go), which adds the Reject, Retry, and Switch outcomes on
+// top of a noisecat-specific, downgrade-bound negotiation_data convention.
+// That layer is noisecat-to-noisecat only.
 package noisesocket
 
 import (
@@ -28,6 +32,7 @@ import (
 	"time"
 
 	"github.com/flynn/noise"
+	"github.com/gedigi/noisecat/pkg/transport"
 )
 
 const (
@@ -44,12 +49,18 @@ type Conn struct {
 	conn     net.Conn
 	isClient bool
 
-	cfg             *noise.Config
-	initialNegData  []byte
-	appPrologue     []byte
-	hs              *noise.HandshakeState
-	handshakeDone   bool
-	handshakeMu     sync.Mutex
+	cfg            *noise.Config
+	initialNegData []byte
+	appPrologue    []byte
+	hs             *noise.HandshakeState
+	handshakeDone  bool
+	handshakeMu    sync.Mutex
+
+	// neg, when non-nil, activates the noisecat v1 negotiation layer
+	// (Reject/Retry/Switch). When nil, Handshake runs the legacy
+	// Accept-only path. In negotiation mode cfg is built per attempt via
+	// neg.BuildConfig rather than supplied up front.
+	neg *transport.Negotiation
 
 	in, out         *noise.CipherState
 	inLock, outLock sync.Mutex
@@ -110,6 +121,19 @@ func Client(c net.Conn, cfg *noise.Config, initialNegData, appPrologue []byte) *
 	return &Conn{conn: c, cfg: cfg, initialNegData: initialNegData, appPrologue: appPrologue, isClient: true}
 }
 
+// ClientWithNegotiation wraps c as a client-side conn that runs the
+// noisecat v1 negotiation layer (Reject/Retry/Switch) instead of the
+// Accept-only legacy path. cfg is built per attempt via neg.BuildConfig.
+func ClientWithNegotiation(c net.Conn, neg *transport.Negotiation, appPrologue []byte) *Conn {
+	return &Conn{conn: c, neg: neg, appPrologue: appPrologue, isClient: true}
+}
+
+// ServerWithNegotiation wraps c as a server-side conn that runs the
+// noisecat v1 negotiation layer.
+func ServerWithNegotiation(c net.Conn, neg *transport.Negotiation, appPrologue []byte) *Conn {
+	return &Conn{conn: c, neg: neg, appPrologue: appPrologue, isClient: false}
+}
+
 // Handshake performs the NoiseSocket handshake on first call; subsequent
 // calls return nil immediately. Called automatically by Read/Write.
 func (c *Conn) Handshake() error {
@@ -117,6 +141,10 @@ func (c *Conn) Handshake() error {
 	defer c.handshakeMu.Unlock()
 	if c.handshakeDone {
 		return nil
+	}
+
+	if c.neg != nil {
+		return c.handshakeNegotiated()
 	}
 
 	// Per the spec, prologue = "NoiseSocketInit1" || neg_data_len ||

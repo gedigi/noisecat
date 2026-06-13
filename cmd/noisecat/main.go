@@ -39,6 +39,12 @@ func parseFlags() noisecat.Config {
 	flag.StringVar(&config.Prologue, "prologue", "", "application `prologue` mixed into the handshake hash")
 	flag.StringVar(&config.NegotiationData, "negotiation", "", "NoiseSocket negotiation_`data` (only used with -transport noisesocket)")
 	flag.StringVar(&config.Validate, "validate", "", "validate that the base64 `key` is well-formed for -proto's DH function, then exit")
+	flag.BoolVar(&config.IPv4Only, "4", false, "use IPv4 only")
+	flag.BoolVar(&config.IPv6Only, "6", false, "use IPv6 only")
+	flag.IntVar(&config.TimeoutSeconds, "w", 0, "timeout in `seconds` for connect/handshake and idle connections (0 = none)")
+	flag.StringVar(&config.NSFallback, "ns-fallback", "", "noisesocket client: comma-separated fallback `protocols` accepted on retry/switch")
+	flag.StringVar(&config.NSSupport, "ns-support", "", "noisesocket listener: comma-separated supported `protocols` (enables negotiation)")
+	flag.StringVar(&config.NSPolicy, "ns-policy", "", "noisesocket listener action on unsupported proposal: reject|retry|switch (default reject)")
 	flag.Parse()
 	if config.Keygen || config.Validate != "" {
 		return config

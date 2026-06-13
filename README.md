@@ -12,7 +12,16 @@ noisecat is a netcat-style networking utility that speaks the [Noise Protocol Fr
 
 ## Install
 
-**Prebuilt binaries** (Linux, macOS, FreeBSD, Windows; amd64 and arm64 where applicable) from the [Releases page](https://github.com/gedigi/noisecat/releases/latest). Each archive ships `noisecat`, `LICENSE`, and `README.md`; a `checksums.txt` is published alongside.
+**Prebuilt binaries** (Linux, macOS, FreeBSD, Windows; amd64 and arm64 where applicable) from the [Releases page](https://github.com/gedigi/noisecat/releases/latest). Each archive ships `noisecat`, `LICENSE`, and `README.md`, plus a CycloneDX SBOM; a `checksums.txt` is published alongside and **cosign-signed** (keyless). Verify it with:
+
+```bash
+cosign verify-blob \
+  --certificate checksums.txt.pem \
+  --signature checksums.txt.sig \
+  --certificate-identity-regexp 'https://github.com/gedigi/noisecat/.+' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+```
 
 ```bash
 # macOS Apple Silicon, replace the version with the one you want from the Releases page:
@@ -42,6 +51,8 @@ make linux darwin windows freebsd   # cross-compile into bin/
 Usage: noisecat [options] [address] [port]
 
 Options:
+  -4	use IPv4 only
+  -6	use IPv6 only
   -e command
     	executes the given command
   -k	accepts multiple connections (-l && (-e || -proxy) required)
@@ -52,6 +63,12 @@ Options:
     	loads local keypair from file (use -keygen to generate)
   -negotiation data
     	NoiseSocket negotiation_data (only used with -transport noisesocket)
+  -ns-fallback protocols
+    	noisesocket client: comma-separated fallback protocols accepted on retry/switch
+  -ns-policy string
+    	noisesocket listener action on unsupported proposal: reject|retry|switch (default reject)
+  -ns-support protocols
+    	noisesocket listener: comma-separated supported protocols (enables negotiation)
   -p port
     	uses source port (default "0")
   -prologue prologue
@@ -71,6 +88,8 @@ Options:
   -v	prints verbose output
   -validate key
     	validate that the base64 key is well-formed for -proto's DH function, then exit
+  -w seconds
+    	timeout in seconds for connect/handshake and idle connections (0 = none)
 
 Protocol name format: Noise_PT_DH_CP_HS
 
@@ -104,6 +123,8 @@ The flags mirror traditional netcat:
 
 - `-l -p 31337` listens on TCP port 31337.
 - `-e /bin/sh` runs `/bin/sh` on connect (reverse shell anyone?).
+- `-4` / `-6` force the IPv4 or IPv6 address family (mutually exclusive).
+- `-w <seconds>` bounds the connect + handshake, and closes a connection once it has been idle for that long. `0` (the default) means no timeout.
 
 The Noise-specific flags:
 
@@ -175,13 +196,41 @@ noisecat speaks the Noise Protocol Framework over a pluggable transport layer. T
 | `-transport`     | Wire format | Notes |
 |---|---|---|
 | `raw` (default)  | 2-byte big-endian length prefix + Noise message | noisecat's historical framing; interoperable with itself only. |
-| `noisesocket`    | [NoiseSocket spec](https://noiseprotocol.org/noisesocket): handshake messages carry `negotiation_data`, encrypted payloads contain an inner `body_len` + arbitrary padding, prologue is `"NoiseSocketInit1"` + `neg_data_len` + `neg_data` + app prologue | Spec-compliant. Only the Accept negotiation outcome is supported (no Switch / Retry / Reject). |
+| `noisesocket`    | [NoiseSocket spec](https://noiseprotocol.org/noisesocket): handshake messages carry `negotiation_data`, encrypted payloads contain an inner `body_len` + arbitrary padding, prologue is `"NoiseSocketInit1"` + `neg_data_len` + `neg_data` + app prologue | Spec-compliant, Accept-only by default. Opt into the **noisecat v1 negotiation layer** (Reject / Retry / Switch) with the `-ns-*` flags below. |
 | `bolt8`          | [BOLT-8](https://github.com/lightning/bolts/blob/master/08-transport.md): `Noise_XK_secp256k1_ChaChaPoly_SHA256`, fixed-size handshake acts (50 / 50 / 66 bytes) with a 1-byte version prefix, encrypted 2-byte length headers + AEAD-tagged payloads, automatic rekey every 1000 messages, prologue defaults to `"lightning"` | Auto-selected when `-proto` uses `secp256k1`. Interoperable with `lnd` / `cln` / `eclair` — Appendix A test vectors pass byte-for-byte. |
 
 Companion flags that work with any transport:
 
 - `-prologue <string>` mixes the given bytes into the handshake hash. Both peers must use the same value.
 - `-negotiation <string>` (NoiseSocket only) is the initiator's first-message `negotiation_data`.
+
+### NoiseSocket negotiation (Reject / Retry / Switch)
+
+By default the `noisesocket` transport is **Accept-only** and spec-interoperable: the responder reads the initiator's `negotiation_data` and proceeds with the proposed protocol. The `-ns-*` flags activate an **opt-in, noisecat-specific** negotiation layer that adds the three remaining outcomes. It only interoperates noisecat-to-noisecat (like the `raw` transport).
+
+- `-ns-support <p1,p2,…>` (listener) — protocols the responder accepts, in preference order. Setting this enables negotiation on the listener.
+- `-ns-policy reject|retry|switch` (listener, default `reject`) — what to do when the initiator proposes a protocol not in `-ns-support`:
+  - `reject` — refuse and close (initiator gets a clear error).
+  - `retry` — ask the initiator to retry with the responder's preferred protocol.
+  - `switch` — invert roles: the responder becomes the initiator of its preferred protocol.
+- `-ns-fallback <p1,p2,…>` (client) — protocols the initiator will accept if asked to retry or switch. Setting this enables negotiation on the client. The `-proto` value is the initiator's proposal; a requested protocol outside `{proto} ∪ fallback` aborts the handshake.
+
+Each negotiation attempt mixes the prior transcript into the handshake prologue, so a tampered or stripped retry/switch makes the handshake fail (downgrade binding). The chain is capped at 4 attempts. A `switch` requires both sides to hold the key material the target protocol needs *in their inverted roles* (e.g. `-lstatic`/`-rstatic`), or the handshake aborts with an error.
+
+**Example — listener supports only `XX`, steers an `NN` client via retry:**
+
+```bash
+# Listener: accept only XX; retry anything else
+$ noisecat -transport noisesocket -l -p 4444 \
+    -ns-support Noise_XX_25519_AESGCM_SHA256 -ns-policy retry
+
+# Client: propose NN, allow falling back to XX
+$ noisecat -transport noisesocket 127.0.0.1 4444 \
+    -proto Noise_NN_25519_AESGCM_SHA256 \
+    -ns-fallback Noise_XX_25519_AESGCM_SHA256
+```
+
+Swap `-ns-policy retry` for `switch` to have the listener drive the `XX` handshake itself, or `reject` to refuse outright.
 
 ## Development
 
@@ -192,7 +241,7 @@ make lint         # golangci-lint (install separately)
 make linux darwin windows freebsd   # cross-compile
 ```
 
-Requires Go 1.23+. CI runs build / vet / test on Linux, macOS, and Windows; lints via `golangci-lint`; and runs `govulncheck` for known CVEs on every push and PR. Tagging `vX.Y.Z` triggers a `goreleaser` build that publishes archives + sha256 checksums to the corresponding GitHub Release.
+Requires Go 1.23+. CI runs build / vet / test on Linux, macOS, and Windows; lints via `golangci-lint`; and runs `govulncheck` for known CVEs on every push and PR. Tagging `vX.Y.Z` triggers a `goreleaser` build that publishes archives + sha256 checksums to the corresponding GitHub Release, each archive accompanied by a CycloneDX SBOM and the checksums file cosign-signed via GitHub OIDC. Dependabot keeps Go modules and Actions up to date weekly.
 
 ## Contributing
 

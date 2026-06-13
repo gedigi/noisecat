@@ -1,0 +1,30 @@
+version: 2
+updates:
+  # Go module dependencies (flynn/noise, dcrd secp256k1, go-shellwords, …).
+  - package-ecosystem: gomod
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "deps"
+    groups:
+      go-dependencies:
+        patterns:
+          - "*"
+
+  # GitHub Actions used by the CI and release workflows.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - ci
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        patterns:
+          - "*"

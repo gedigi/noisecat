@@ -21,10 +21,12 @@ func (Transport) Name() string { return "noisesocket" }
 // sent with the first handshake message; opts.Prologue is appended to
 // the spec-mandated "NoiseSocketInit1" || neg_len || neg_data prefix.
 func (Transport) Dial(network, addr, localAddr string, cfg *noise.Config, opts transport.Options) (net.Conn, error) {
-	if cfg == nil {
+	// In negotiation mode cfg is built per attempt via opts.Negotiation;
+	// otherwise the single cfg is required.
+	if cfg == nil && opts.Negotiation == nil {
 		return nil, errors.New("noisesocket: nil noise.Config")
 	}
-	var dialer net.Dialer
+	dialer := net.Dialer{Timeout: opts.DialTimeout}
 	if localAddr != "" {
 		laddr, err := net.ResolveTCPAddr(network, localAddr)
 		if err != nil {
@@ -36,13 +38,16 @@ func (Transport) Dial(network, addr, localAddr string, cfg *noise.Config, opts t
 	if err != nil {
 		return nil, err
 	}
+	if opts.Negotiation != nil {
+		return ClientWithNegotiation(raw, opts.Negotiation, opts.Prologue), nil
+	}
 	return Client(raw, cfg, opts.NegotiationData, opts.Prologue), nil
 }
 
 // Listen creates a NoiseSocket listener. opts is captured and applied to
 // every accepted connection.
 func (Transport) Listen(network, laddr string, cfg *noise.Config, opts transport.Options) (net.Listener, error) {
-	if cfg == nil {
+	if cfg == nil && opts.Negotiation == nil {
 		return nil, errors.New("noisesocket: nil noise.Config")
 	}
 	l, err := net.Listen(network, laddr)
@@ -65,6 +70,9 @@ func (l *Listener) Accept() (net.Conn, error) {
 	raw, err := l.Listener.Accept()
 	if err != nil {
 		return nil, err
+	}
+	if l.opts.Negotiation != nil {
+		return ServerWithNegotiation(raw, l.opts.Negotiation, l.opts.Prologue), nil
 	}
 	return Server(raw, l.cfg, l.opts.NegotiationData, l.opts.Prologue), nil
 }
