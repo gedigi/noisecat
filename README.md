@@ -86,6 +86,7 @@ Options:
     	uses source address
   -transport transport
     	wire transport: raw (default), noisesocket, bolt8 (auto-selected for secp256k1), or whatsapp (default "raw")
+  -u	use UDP (reliable, via KCP) instead of TCP; raw transport + Curve25519 only
   -v	prints verbose output
   -validate key
     	validate that the base64 key is well-formed for -proto's DH function, then exit
@@ -126,6 +127,7 @@ The flags mirror traditional netcat:
 - `-e /bin/sh` runs `/bin/sh` on connect (reverse shell anyone?).
 - `-4` / `-6` force the IPv4 or IPv6 address family (mutually exclusive).
 - `-w <seconds>` bounds the connect + handshake, and closes a connection once it has been idle for that long. `0` (the default) means no timeout.
+- `-u` runs over **UDP instead of TCP**. Noise needs a reliable, ordered stream, so the datagrams are carried by [KCP](https://github.com/xtaci/kcp-go) (reliable-UDP ARQ) and the usual `raw` Noise framing runs on top — wire-compatible with `raw`-over-TCP at the Noise layer. Curve25519 / `raw` transport only. Note: UDP has no TCP-style half-close, so interactive/bidirectional sessions (e.g. a reverse shell) work, but the send-then-EOF batch pattern (`printf … | noisecat -u …`) can drop the trailing response.
 
 The Noise-specific flags:
 
@@ -150,6 +152,16 @@ $ noisecat -k -e /bin/sh -l -p 4444
 
 # Client
 $ noisecat <server-ip> 4444
+```
+
+**Noise over UDP** (reliable, via KCP):
+
+```bash
+# Server (bind a shell over UDP)
+$ noisecat -u -l -p 4444 -e /bin/sh
+
+# Client
+$ noisecat -u <server-ip> 4444
 ```
 
 **NoiseSocket round-trip** with negotiation_data:
@@ -292,6 +304,7 @@ Bug reports, feature suggestions, and pull requests are welcome — open an issu
 - [`github.com/decred/dcrd/dcrec/secp256k1`](https://github.com/decred/dcrd) for the pure-Go secp256k1 implementation underpinning the BOLT-8 transport.
 - [`github.com/tulir/whatsmeow`](https://github.com/tulir/whatsmeow) as the reference for WhatsApp's multi-device Noise wire format, certificate chain, and pinned root key.
 - [`github.com/coder/websocket`](https://github.com/coder/websocket) for the WebSocket client the WhatsApp transport dials over, and [`filippo.io/edwards25519`](https://filippo.io/edwards25519) for the XEdDSA certificate-signature verification.
+- [`github.com/xtaci/kcp-go`](https://github.com/xtaci/kcp-go) for the reliable-UDP (ARQ) layer the `-u` UDP mode runs Noise over.
 - [`github.com/mattn/go-shellwords`](https://github.com/mattn/go-shellwords) for parsing the `-e` command line.
 
 ## License
