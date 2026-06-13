@@ -86,10 +86,12 @@ func (c *Conn) Write(b []byte) (int, error) {
 	data := b
 	for len(data) > 0 {
 
-		// fragment the data
+		// fragment the data, leaving room for the 16-byte AEAD tag so the
+		// resulting ciphertext still fits the 2-byte length frame
+		// (fragment + tag <= 0xFFFF).
 		m := len(data)
-		if m > noise.MaxMsgLen {
-			m = noise.MaxMsgLen
+		if m > noise.MaxMsgLen-16 {
+			m = noise.MaxMsgLen - 16
 		}
 
 		// Encrypt
