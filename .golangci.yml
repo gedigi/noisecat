@@ -23,6 +23,7 @@ linters:
       excludes:
         - G104 # ignored error returns are intentional in noisecat (CLI defaults)
         - G204 # exec.Command with user input is the documented purpose of -e
+        - G115 # integer conversions in the protobuf/framing codecs are bounded by design (field numbers, lengths <= maxFrameLen)
   exclusions:
     rules:
       - path: _test\.go
